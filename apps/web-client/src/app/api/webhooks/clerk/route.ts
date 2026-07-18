@@ -8,6 +8,7 @@ interface ClerkUserEventData {
     id: string;
     email_address: string;
   }>;
+  primary_email_address_id: string | null;
   first_name: string | null;
   last_name: string | null;
   password_enabled: boolean;
@@ -67,7 +68,9 @@ export async function POST(req: Request) {
 
     if (data.password_enabled) {
       const email =
-        data.email_addresses[0]?.email_address;
+        data.email_addresses.find(
+          ({ id }) => id === data.primary_email_address_id,
+        )?.email_address ?? data.email_addresses[0]?.email_address;
 
       if (email) {
         const name =
