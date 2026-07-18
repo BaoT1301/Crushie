@@ -63,8 +63,10 @@
     "react-error-boundary": "^6.1.0",
     "react-hook-form": "^7.69.0",
     "react-webcam": "^7.2.0",
+    "resend": "^6.17.2",
     "sonner": "^2.0.7",
     "superjson": "^2.2.6",
+    "svix": "^1.98.0",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.9"
