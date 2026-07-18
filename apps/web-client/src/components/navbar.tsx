@@ -24,6 +24,7 @@ import {
   HeartHandshake,
   UserRoundCog,
   Compass,
+  Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
@@ -59,6 +60,11 @@ const navItems = [
     label: "Theme Editor",
     href: "/theme-editor",
     icon: Palette,
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
   },
 ];
 
