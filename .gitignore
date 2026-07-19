@@ -50,3 +50,7 @@ supabase/.temp
 *.log
 .turbo
 .orchestrator/
+
+# Orchestrator plumbing (per-run worktrees + MCP cache)
+.orchestrator/
+.mcp-cache/
