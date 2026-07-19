@@ -1,4 +1,4 @@
-# Crushie B
+# Crushie
 
 ### AI Dating Coach for Students
 
