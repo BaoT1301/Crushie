@@ -1,6 +1,4 @@
-<div align="center">
-
-# 💘 Crushie
+# Crushie B
 
 ### AI Dating Coach for Students
 
