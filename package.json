@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "node -e \"console.log('crushie verify: ok'); process.exit(0)\"",
+    "test": "node -e \"console.error('crushie verify: FAILING (demo scenario)'); process.exit(1)\"",
     "dev:web": "npm run dev --workspace=@starter/web",
     "build:web": "npm run build --workspace=@starter/web",
     "dev:llm": "npm run dev --workspace=@starter/llm",
