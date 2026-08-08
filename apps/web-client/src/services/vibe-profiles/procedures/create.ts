@@ -2,6 +2,7 @@ import { authedProcedure } from "@/server/init";
 import { vibeProfiles } from "../schema";
 import { eq } from "drizzle-orm";
 import { createVibeProfileInput } from "./validation";
+import { embedAndStoreProfile } from "../embedding";
 
 export const create = authedProcedure
   .input(createVibeProfileInput)
@@ -14,7 +15,7 @@ export const create = authedProcedure
     });
 
     const [created] = await ctx.secureDb!.rls(async (tx) => {
-      return tx
+      const rows = await tx
         .insert(vibeProfiles)
         .values({
           userId: ctx.user.id,
@@ -43,6 +44,19 @@ export const create = authedProcedure
           },
         })
         .returning();
+
+      // Same transaction as the insert: a profile with no vector never appears
+      // in matching, so the two are one operation.
+      await embedAndStoreProfile(tx, ctx.user.id, {
+        vibeName: input.vibeName,
+        vibeSummary: input.vibeSummary,
+        energy: input.energy,
+        moodTags: input.moodTags,
+        styleTags: input.styleTags,
+        interestTags: input.interestTags,
+      });
+
+      return rows;
     });
 
     return created;

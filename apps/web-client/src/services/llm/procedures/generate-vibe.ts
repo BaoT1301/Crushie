@@ -6,7 +6,9 @@ import { authedProcedure } from "@/server/init";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { vibeProfiles } from "@/services/vibe-profiles/schema";
+import { embedAndStoreProfile } from "@/services/vibe-profiles/embedding";
 import { generateVibeProfile } from "../client";
+import { logger } from "@/lib/logger";
 
 // ── Input ───────────────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ export const generateVibe = authedProcedure
       });
 
       const [saved] = await ctx.secureDb!.rls(async (tx) => {
-        return tx
+        const rows = await tx
           .insert(vibeProfiles)
           .values({
             userId: ctx.user.id,
@@ -69,11 +71,24 @@ export const generateVibe = authedProcedure
             },
           })
           .returning();
+
+        // Inside the same transaction as the insert: a profile that exists
+        // without a vector is invisible to matching, so the two belong together.
+        await embedAndStoreProfile(tx, ctx.user.id, {
+          vibeName: data.vibeName,
+          vibeSummary: data.vibeSummary,
+          energy: data.energy,
+          moodTags: data.moodTags,
+          styleTags: data.styleTags,
+          interestTags: data.interestTags,
+        });
+
+        return rows;
       });
 
       return { profile: saved, meta };
     } catch (error) {
-      console.error("❌ generateVibe failed:", error);
+      logger.error("generateVibe failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
