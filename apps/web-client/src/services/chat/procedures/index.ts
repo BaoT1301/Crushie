@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { directMessages } from "../schema";
 import { vibeMatches } from "@/services/social/schema";
+import { replyAsPersonaIfDemoMatch } from "../persona-reply";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -19,9 +20,16 @@ async function assertMatchParticipant(
   },
   matchId: string,
 ) {
+  // Returns the participants, not just the id: sendMessage needs to know
+  // whether the other side is a sample persona, and re-querying for that would
+  // be a second round trip for something this row already has.
   const result = (await ctx.secureDb.rls(async (tx) => {
     return tx
-      .select({ id: vibeMatches.id })
+      .select({
+        id: vibeMatches.id,
+        userAId: vibeMatches.userAId,
+        userBId: vibeMatches.userBId,
+      })
       .from(vibeMatches)
       .where(
         and(
@@ -33,7 +41,7 @@ async function assertMatchParticipant(
         ),
       )
       .limit(1);
-  })) as Array<{ id: string }>;
+  })) as Array<{ id: string; userAId: string; userBId: string }>;
 
   if (!result.length) {
     throw new TRPCError({
@@ -41,6 +49,8 @@ async function assertMatchParticipant(
       message: "Match not found or not accessible.",
     });
   }
+
+  return result[0];
 }
 
 // ── Procedures ──────────────────────────────────────────────────────────
@@ -53,7 +63,7 @@ const sendMessage = authedProcedure
     }),
   )
   .mutation(async ({ ctx, input }) => {
-    await assertMatchParticipant(ctx as any, input.matchId);
+    const match = await assertMatchParticipant(ctx as any, input.matchId);
 
     const [message] = await ctx.secureDb!.rls(async (tx) => {
       return tx
@@ -64,6 +74,20 @@ const sendMessage = authedProcedure
           content: input.content,
         })
         .returning();
+    });
+
+    // If the other side is a seeded sample profile, have it answer.
+    //
+    // Awaited rather than fired off after the response, because on a serverless
+    // host nothing is guaranteed to run once the response is sent. It is a
+    // short completion on the fast model, and it swallows its own failures, so
+    // the worst case is the persona staying quiet — never a lost message.
+    //
+    // Real-to-real matches skip this entirely.
+    await replyAsPersonaIfDemoMatch({
+      matchId: input.matchId,
+      userAId: match.userAId,
+      userBId: match.userBId,
     });
 
     return message;
