@@ -7,6 +7,7 @@ import { z } from "zod";
 import { desc, lt, eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { analyzerSessions } from "@/services/verification/schema";
+import { logger } from "@/lib/logger";
 
 export const getAnalyzerHistoryInput = z.object({
   /** Cursor: createdAt of the last item (ISO string) for pagination */
@@ -53,7 +54,7 @@ export const getAnalyzerHistory = authedProcedure
         nextCursor,
       };
     } catch (error) {
-      console.error("❌ getAnalyzerHistory failed:", error);
+      logger.error("getAnalyzerHistory failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to fetch analyzer history",

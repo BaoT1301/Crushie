@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { eq, sql, and } from "drizzle-orm";
 import { vibeProfiles } from "@/services/vibe-profiles/schema";
 import { vibeMatches } from "@/services/social/schema";
+import { logger } from "@/lib/logger";
 import {
   evaluateMatch as callEvaluateMatch,
   type ProfileSummary,
@@ -152,7 +153,7 @@ export const evaluateMatchProcedure = authedProcedure
       return { compatibility, meta, vectorSimilarity };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
-      console.error("❌ evaluateMatch failed:", error);
+      logger.error("evaluateMatch failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:

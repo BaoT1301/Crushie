@@ -7,6 +7,7 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { analyzerSessions } from "@/services/verification/schema";
+import { logger } from "@/lib/logger";
 
 export const getAnalyzerSessionInput = z.object({
   id: z.string().uuid("Invalid session ID"),
@@ -42,7 +43,7 @@ export const getAnalyzerSession = authedProcedure
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
-      console.error("❌ getAnalyzerSession failed:", error);
+      logger.error("getAnalyzerSession failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to fetch analyzer session",

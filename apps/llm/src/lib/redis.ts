@@ -7,6 +7,7 @@
 
 import Redis from "ioredis";
 import crypto from "crypto";
+import { logger } from "./logger.js";
 
 let redis: Redis | null = null;
 let isConnected = false;
@@ -40,7 +41,7 @@ export function initRedis(): void {
 
     redis.on("error", (err) => {
       isConnected = false;
-      console.warn("⚠️  Redis error (caching disabled):", err.message);
+      logger.warn("Redis error (caching disabled)", { detail: err.message });
     });
 
     redis.on("close", () => {
@@ -48,10 +49,10 @@ export function initRedis(): void {
     });
 
     redis.connect().catch(() => {
-      console.warn("⚠️  Could not connect to Redis — caching disabled");
+      logger.warn("Could not connect to Redis — caching disabled");
     });
   } catch {
-    console.warn("⚠️  Redis init failed — caching disabled");
+    logger.warn("Redis init failed — caching disabled");
   }
 }
 
