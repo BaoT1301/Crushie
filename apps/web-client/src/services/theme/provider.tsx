@@ -1,10 +1,34 @@
 "use client";
 
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, Suspense } from "react";
 import { useEditorStore } from "./store";
 import { applyThemeToElement } from "./apply";
 import { useThemePresetFromUrl } from "./hooks";
 import { ThemeMode } from "./types";
+
+/**
+ * Reads the `?theme=` preset. Renders nothing.
+ *
+ * It is a separate component, mounted inside its own Suspense boundary, purely
+ * to contain a prerender bailout.
+ *
+ * useThemePresetFromUrl uses nuqs, which calls next/navigation's
+ * useSearchParams. In a statically prerendered route that forces the nearest
+ * Suspense boundary to bail to client-side rendering. This hook used to be
+ * called directly in ThemeProvider's body, and the only boundary above it was
+ * the one wrapping the whole app in app/layout.tsx — so the entire tree
+ * bailed. The landing page shipped as an empty shell with
+ * BAILOUT_TO_CLIENT_SIDE_RENDERING and no server-rendered copy at all, which on
+ * the one page that needs to be crawlable is the worst place for it.
+ *
+ * The bailout cannot be removed while the feature exists — reading a query
+ * parameter genuinely requires the request. Isolating it means only this empty
+ * leaf renders on the client, and everything around it prerenders normally.
+ */
+function ThemePresetFromUrl() {
+  useThemePresetFromUrl();
+  return null;
+}
 
 type Coords = { x: number; y: number };
 
@@ -29,9 +53,6 @@ type ThemeProviderProps = {
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   const { themeState, setThemeState } = useEditorStore();
-
-  // Handle theme preset from URL
-  useThemePresetFromUrl();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -75,6 +96,11 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>
+      {/* Its own boundary, so the bailout stops here instead of taking the
+          whole app with it. See ThemePresetFromUrl above. */}
+      <Suspense fallback={null}>
+        <ThemePresetFromUrl />
+      </Suspense>
       {children}
     </ThemeProviderContext.Provider>
   );

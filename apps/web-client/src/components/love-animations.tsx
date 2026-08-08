@@ -7,18 +7,45 @@ import { cn } from "@/lib/utils";
 // Floating Hearts — Animated hearts rising and fading
 // ============================================================================
 
+/**
+ * Deterministic pseudo-random from an index.
+ *
+ * Math.random() during render produces different values on the server and the
+ * client, which React reports as "A tree hydrated but some attributes of the
+ * server rendered HTML didn't match the client properties." Seeding from the
+ * item index keeps the variation while making both renders agree.
+ */
+function seeded(i: number, salt = 1): number {
+  const x = Math.sin((i + 1) * 12.9898 * salt) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/**
+ * Round a value before it reaches an inline style.
+ *
+ * Seeding alone does not remove the hydration warning. The server writes the
+ * full double (`rotate(-13.283454919292126deg)`), the browser parses it into
+ * the CSSOM and serialises it back at 6 significant figures
+ * (`rotate(-13.2835deg)`), and React compares its own string against that
+ * round-tripped one and reports a mismatch. Emitting a value that already
+ * survives the round trip is what makes both renders agree — keep the rounding.
+ */
+function styleFloat(n: number): number {
+  return Number(n.toFixed(3));
+}
+
 const heartVariants: Variants = {
   initial: (i: number) => ({
     opacity: 0,
     y: 0,
     x: 0,
     scale: 0.5,
-    rotate: -15 + Math.random() * 30,
+    rotate: styleFloat(-15 + seeded(i) * 30),
   }),
   animate: (i: number) => ({
     opacity: [0, 1, 1, 0],
     y: [0, -60, -120, -180],
-    x: [0, (i % 2 === 0 ? 1 : -1) * (10 + Math.random() * 20), 0],
+    x: [0, styleFloat((i % 2 === 0 ? 1 : -1) * (10 + seeded(i, 2) * 20)), 0],
     scale: [0.5, 1, 0.8, 0.3],
     rotate: [-15 + i * 10, 15 - i * 5, -10 + i * 3],
     transition: {
@@ -77,114 +104,13 @@ export function FloatingHearts({
           animate="animate"
           className="absolute text-primary/30"
           style={{
-            left: `${15 + (i * 70) / count}%`,
+            // See styleFloat: `${(6 * 70) / 6}%` is 26.666666666666664%, which
+            // the browser hands back as 26.6667% and React flags as a mismatch.
+            left: `${styleFloat(15 + (i * 70) / count)}%`,
             bottom: "10%",
           }}
         >
           <HeartIcon className="h-5 w-5" />
-        </motion.div>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================================
-// Heartbeat Pulse — A heart that beats
-// ============================================================================
-
-export function HeartbeatPulse({ className }: { className?: string }) {
-  return (
-    <motion.div
-      className={cn("text-primary", className)}
-      animate={{
-        scale: [1, 1.2, 1, 1.15, 1],
-      }}
-      transition={{
-        duration: 1.2,
-        repeat: Infinity,
-        ease: "easeInOut",
-      }}
-    >
-      <HeartIcon className="h-8 w-8" />
-    </motion.div>
-  );
-}
-
-// ============================================================================
-// Love Sparkle — Heart with sparkle particles around it
-// ============================================================================
-
-export function LoveSparkle({
-  className,
-  children,
-}: {
-  className?: string;
-  children?: React.ReactNode;
-}) {
-  const sparkles = Array.from({ length: 6 });
-  return (
-    <div
-      className={cn(
-        "relative inline-flex items-center justify-center",
-        className,
-      )}
-    >
-      {sparkles.map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute h-1.5 w-1.5 rounded-full bg-primary/60"
-          animate={{
-            opacity: [0, 1, 0],
-            scale: [0, 1, 0],
-            x: [0, Math.cos((i * Math.PI * 2) / 6) * 24],
-            y: [0, Math.sin((i * Math.PI * 2) / 6) * 24],
-          }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            delay: i * 0.3,
-            ease: "easeOut",
-          }}
-        />
-      ))}
-      {children ?? <HeartbeatPulse />}
-    </div>
-  );
-}
-
-// ============================================================================
-// Heart Trail — Hearts following cursor or floating across screen
-// ============================================================================
-
-export function HeartTrail({ className }: { className?: string }) {
-  return (
-    <div
-      className={cn(
-        "pointer-events-none fixed inset-0 z-0 overflow-hidden",
-        className,
-      )}
-    >
-      {Array.from({ length: 12 }).map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute text-primary/10"
-          style={{
-            left: `${Math.random() * 100}%`,
-            top: `${Math.random() * 100}%`,
-          }}
-          animate={{
-            y: [0, -window?.innerHeight || -800],
-            opacity: [0, 0.3, 0],
-            rotate: [0, 360],
-          }}
-          transition={{
-            duration: 8 + Math.random() * 8,
-            repeat: Infinity,
-            delay: i * 1.2,
-            ease: "linear",
-          }}
-        >
-          <HeartIcon className={`h-${3 + (i % 4)} w-${3 + (i % 4)}`} />
         </motion.div>
       ))}
     </div>

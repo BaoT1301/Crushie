@@ -40,37 +40,44 @@
 }
 
 .dark {
-  --background: #1a0510;
+  --background: #0b0a0b;
   --foreground: #fce4ec;
-  --card: #2d0a1c;
+  --card: #141215;
   --card-foreground: #fce4ec;
-  --popover: #2d0a1c;
+  --popover: #141215;
   --popover-foreground: #fce4ec;
   --primary: #f472b6;
-  --primary-foreground: #1a0510;
-  --secondary: #4a0e2e;
+  --primary-foreground: #0b0a0b;
+  --secondary: #231a1f;
   --secondary-foreground: #fce4ec;
-  --muted: #3b0822;
-  --muted-foreground: #f9a8b8;
-  --accent: #5c1535;
+  --muted: #191719;
+  /* Warm grey, not pink. This was #f9a8b8, a saturated rose, and it is the
+     colour of every paragraph on the site. Contrast was never the problem
+     (10.66:1 on the near-black background), but when body copy is accent
+     coloured the accent stops signalling anything: headings, links, CTAs and
+     prose all read at the same emotional volume and the page looks washed.
+     9.50:1 here, so legibility is unchanged and the rose is freed up to
+     actually mean something. */
+  --muted-foreground: #b9b2b5;
+  --accent: #2a1f25;
   --accent-foreground: #fce4ec;
   --destructive: #fb7185;
-  --destructive-foreground: #1a0510;
-  --border: #6b1d3f;
-  --input: #6b1d3f;
+  --destructive-foreground: #0b0a0b;
+  --border: #2c262a;
+  --input: #2c262a;
   --ring: #f472b6;
   --chart-1: #f472b6;
   --chart-2: #f9a8d4;
   --chart-3: #ec4899;
   --chart-4: #db2777;
   --chart-5: #fbcfe8;
-  --sidebar: #200812;
+  --sidebar: #100e11;
   --sidebar-foreground: #fce4ec;
   --sidebar-primary: #f472b6;
-  --sidebar-primary-foreground: #1a0510;
-  --sidebar-accent: #3b0822;
+  --sidebar-primary-foreground: #0b0a0b;
+  --sidebar-accent: #191719;
   --sidebar-accent-foreground: #fce4ec;
-  --sidebar-border: #5c1535;
+  --sidebar-border: #2c262a;
   --sidebar-ring: #f472b6;
 }
 
@@ -112,6 +119,8 @@
   --color-glass: rgba(255, 255, 255, 0.08);
   --color-glass-border: rgba(255, 255, 255, 0.15);
   --color-glass-strong: rgba(255, 255, 255, 0.15);
+  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -201,10 +210,138 @@
   animation: float 3s ease-in-out infinite;
 }
 
+/* ============================================================================
+   Landing page ambient layer
+
+   One ambient idea, not four. This replaces the previous FloatingOrbs +
+   ParticleField + FloatingHearts + GradientMesh stack (~67 concurrently
+   animating motion.div nodes). Each of those promoted its own compositor
+   layer, which is the documented "layer explosion" failure mode on low-memory
+   devices. These are plain CSS keyframes on transform/opacity only, so they
+   run on the compositor with no JS, no React re-renders, and no main-thread
+   animation loops.
+   ============================================================================ */
+
+@keyframes ambient-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, -4%, 0) scale(1.08);
+  }
+}
+
+.ambient-drift {
+  animation: ambient-drift 28s ease-in-out infinite;
+}
+
+/* Footer hearts. Deliberately kept: this is a signature moment, scoped to the
+   footer so it reads as an intentional sign-off rather than page-wide noise. */
+@keyframes heart-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift, 8px), -128px, 0) scale(0.85);
+  }
+}
+
+.heart-rise {
+  animation: heart-rise var(--dur, 7s) ease-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Off-screen sections skip layout and paint until they approach the viewport.
+   Baseline widely available since 2024. contain-intrinsic-size reserves height
+   so this cannot introduce layout shift. */
+.section-defer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 640px;
+}
+
+/* ============================================================================
+   Reduced motion
+
+   WCAG 2.2.2 requires auto-starting non-essential animation to be pausable or
+   stoppable. Per MDN guidance, "reduce" means minimize non-essential motion,
+   not strip all animation, so decorative loops stop while the interface still
+   responds. Motion-driven components are additionally covered by
+   <MotionConfig reducedMotion="user"> in the root layout.
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  /* .animate-pulse is Tailwind's own utility rather than a custom keyframe,
+     which is why it was missing here. <Skeleton> uses it, so it is on screen
+     during every loading state — the one looping animation this block still
+     let through. .animate-spin is deliberately left alone: it reports that
+     work is in progress rather than decorating. */
+  .ambient-drift,
+  .heart-rise,
+  .animate-glow-pulse,
+  .animate-heartbeat,
+  .animate-shimmer,
+  .animate-float,
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  .heart-rise {
+    opacity: 0.55;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Film grain.
+   Fixed and pointer-events-none, never on a scrolling container: a grain layer
+   that scrolls forces continuous GPU repaints. Static and fixed, it is close to
+   free, and it stops flat near-black surfaces reading as digitally empty. */
+.grain-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+
 /* Gradient mask for anti-clutter scroll fade */
 .gradient-mask-b {
   mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, black 75%, transparent 100%);
+}
+
+/* ============================================================================
+   Safe-area insets
+
+   Anything pinned to the bottom of the viewport sits under the iOS home
+   indicator without this. `safe-area-pb` was already applied by
+   ui/step-progress.tsx but had never been defined anywhere, so the bottom
+   step bar was flush against the indicator on every notched iPhone.
+
+   These only report non-zero once the viewport tag carries `viewport-fit=cover`
+   (set via the `viewport` export in app/layout.tsx). `max()` keeps the declared
+   padding as a floor so the class is also safe on devices with no inset.
+
+   Declared with @utility rather than a plain rule so they sort with the rest
+   of the utilities and a responsive override (`md:pb-10`) still wins. A plain
+   unlayered class would beat every Tailwind padding utility at every width.
+   ============================================================================ */
+@utility safe-area-pb {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+/* Reserves room for a bottom-fixed bar plus the home indicator, for pages that
+   scroll content underneath one. */
+@utility pb-fixed-bar {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
 }
 
 /* Hide scrollbar but keep functionality */
