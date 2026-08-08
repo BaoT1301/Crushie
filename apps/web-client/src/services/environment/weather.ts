@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * Weather Service — OpenWeather Current Weather 2.5 API integration
  *
@@ -46,7 +47,7 @@ export async function fetchWeather(
   lng: number,
 ): Promise<WeatherData | null> {
   if (!OPENWEATHER_API_KEY) {
-    console.warn("⚠️  OPENWEATHER_API_KEY not set — skipping weather fetch");
+    logger.warn("OPENWEATHER_API_KEY not set — skipping weather fetch");
     return null;
   }
 
@@ -55,7 +56,7 @@ export async function fetchWeather(
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
     if (!res.ok) {
-      console.error(`❌ OpenWeather 2.5 returned ${res.status}`);
+      logger.error(`❌ OpenWeather 2.5 returned ${res.status}`);
       return null;
     }
 
@@ -71,7 +72,7 @@ export async function fetchWeather(
       cityName: json.name || "Unknown",
     };
   } catch (error) {
-    console.error("❌ Weather fetch failed:", error);
+    logger.error("Weather fetch failed", error);
     return null;
   }
 }

@@ -8,6 +8,7 @@
 import { authedProcedure } from "@/server/init";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { logger } from "@/lib/logger";
 import {
   uploadAnalyzerImage,
   getAnalyzerImageUrls,
@@ -45,7 +46,7 @@ export const uploadAnalyzerImageProcedure = authedProcedure
         input.mimeType,
       );
     } catch (error) {
-      console.error("❌ uploadAnalyzerImage failed:", error);
+      logger.error("uploadAnalyzerImage failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
@@ -59,7 +60,7 @@ export const getAnalyzerImagesProcedure = authedProcedure.query(
     try {
       return await getAnalyzerImageUrls(ctx.user.id);
     } catch (error) {
-      console.error("❌ getAnalyzerImages failed:", error);
+      logger.error("getAnalyzerImages failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
@@ -77,7 +78,7 @@ export const deleteAnalyzerImagesProcedure = authedProcedure.mutation(
       await deleteAnalyzerImages(ctx.user.id);
       return { success: true };
     } catch (error) {
-      console.error("❌ deleteAnalyzerImages failed:", error);
+      logger.error("deleteAnalyzerImages failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:

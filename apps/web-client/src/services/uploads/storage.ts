@@ -6,6 +6,7 @@
  */
 
 import { supabaseAdmin, USER_UPLOADS_BUCKET } from "@/lib/supabase";
+import { logger } from "@/lib/logger";
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -35,6 +36,69 @@ export class UploadError extends Error {
     super(message);
     this.name = "UploadError";
   }
+}
+
+// ── Signed URLs ─────────────────────────────────────────────────────────
+
+/**
+ * How long a generated read URL stays valid.
+ *
+ * The bucket is private, so reads go through short-lived signed URLs instead
+ * of permanent public ones. Seven days is long enough that a page rendered and
+ * left open keeps working, short enough that a leaked link expires.
+ */
+export const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+/**
+ * Sign a stored object path for reading.
+ *
+ * Accepts either a bare storage path ("{userId}/on-board/abc.jpg") or a legacy
+ * absolute URL. Rows written before the bucket was locked down persisted
+ * absolute public URLs, so the absolute form is detected and its path
+ * extracted rather than breaking every existing profile photo.
+ */
+export async function getSignedUrl(
+  pathOrUrl: string,
+  expiresIn: number = SIGNED_URL_TTL_SECONDS,
+): Promise<string> {
+  const path = toStoragePath(pathOrUrl);
+
+  const { data, error } = await supabaseAdmin.storage
+    .from(USER_UPLOADS_BUCKET)
+    .createSignedUrl(path, expiresIn);
+
+  if (error || !data?.signedUrl) {
+    throw new UploadError(
+      500,
+      `Failed to sign storage object: ${error?.message ?? "unknown error"}`,
+    );
+  }
+
+  return data.signedUrl;
+}
+
+/** Sign many paths at once, preserving order. */
+export async function getSignedUrls(
+  pathsOrUrls: string[],
+  expiresIn: number = SIGNED_URL_TTL_SECONDS,
+): Promise<string[]> {
+  return Promise.all(pathsOrUrls.map((p) => getSignedUrl(p, expiresIn)));
+}
+
+/**
+ * Normalise a stored value to a bucket-relative path.
+ *
+ * Legacy rows hold "https://<project>.supabase.co/storage/v1/object/public/
+ * user-uploads/<path>", so everything after the bucket segment is the path.
+ */
+export function toStoragePath(pathOrUrl: string): string {
+  if (!pathOrUrl.startsWith("http")) return pathOrUrl;
+
+  const marker = `/${USER_UPLOADS_BUCKET}/`;
+  const idx = pathOrUrl.indexOf(marker);
+  if (idx === -1) return pathOrUrl;
+
+  return decodeURIComponent(pathOrUrl.slice(idx + marker.length).split("?")[0]);
 }
 
 // ── Validation ──────────────────────────────────────────────────────────
@@ -80,17 +144,15 @@ export async function uploadOnboardImage(
     });
 
   if (error) {
-    console.error("[upload] Supabase storage error:", error);
+    logger.error("[upload] Supabase storage error", error);
     throw new UploadError(500, `Upload failed: ${error.message}`);
   }
 
   // Get public URL
-  const {
-    data: { publicUrl },
-  } = supabaseAdmin.storage.from(USER_UPLOADS_BUCKET).getPublicUrl(data.path);
+  const signedUrl = await getSignedUrl(data.path);
 
   return {
-    url: publicUrl,
+    url: signedUrl,
     path: data.path,
   };
 }
@@ -112,18 +174,17 @@ export async function getOnboardImageUrls(
     });
 
   if (error) {
-    console.error("[upload] List error:", error);
+    logger.error("[upload] List error", error);
     throw new UploadError(500, `Failed to list images: ${error.message}`);
   }
 
-  return (data ?? []).map((file) => {
-    const path = `${prefix}/${file.name}`;
-    const {
-      data: { publicUrl },
-    } = supabaseAdmin.storage.from(USER_UPLOADS_BUCKET).getPublicUrl(path);
-
-    return { url: publicUrl, path };
-  });
+  // Signing is async, so the map has to be awaited as a batch.
+  return Promise.all(
+    (data ?? []).map(async (file) => {
+      const path = `${prefix}/${file.name}`;
+      return { url: await getSignedUrl(path), path };
+    }),
+  );
 }
 
 // ── Delete ──────────────────────────────────────────────────────────────
@@ -140,7 +201,7 @@ export async function deleteOnboardImages(userId: string): Promise<void> {
     .list(prefix);
 
   if (listError) {
-    console.error("[upload] List error for deletion:", listError);
+    logger.error("[upload] List error for deletion", listError);
     throw new UploadError(
       500,
       `Failed to list images for deletion: ${listError.message}`,
@@ -156,7 +217,7 @@ export async function deleteOnboardImages(userId: string): Promise<void> {
     .remove(paths);
 
   if (deleteError) {
-    console.error("[upload] Delete error:", deleteError);
+    logger.error("[upload] Delete error", deleteError);
     throw new UploadError(
       500,
       `Failed to delete images: ${deleteError.message}`,
@@ -189,16 +250,14 @@ export async function uploadAnalyzerImage(
     });
 
   if (error) {
-    console.error("[upload] Supabase storage error (analyzer):", error);
+    logger.error("[upload] Supabase storage error (analyzer)", error);
     throw new UploadError(500, `Upload failed: ${error.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabaseAdmin.storage.from(USER_UPLOADS_BUCKET).getPublicUrl(data.path);
+  const signedUrl = await getSignedUrl(data.path);
 
   return {
-    url: publicUrl,
+    url: signedUrl,
     path: data.path,
   };
 }
@@ -218,18 +277,17 @@ export async function getAnalyzerImageUrls(
     });
 
   if (error) {
-    console.error("[upload] List error (analyzer):", error);
+    logger.error("[upload] List error (analyzer)", error);
     throw new UploadError(500, `Failed to list images: ${error.message}`);
   }
 
-  return (data ?? []).map((file) => {
-    const path = `${prefix}/${file.name}`;
-    const {
-      data: { publicUrl },
-    } = supabaseAdmin.storage.from(USER_UPLOADS_BUCKET).getPublicUrl(path);
-
-    return { url: publicUrl, path };
-  });
+  // Signing is async, so the map has to be awaited as a batch.
+  return Promise.all(
+    (data ?? []).map(async (file) => {
+      const path = `${prefix}/${file.name}`;
+      return { url: await getSignedUrl(path), path };
+    }),
+  );
 }
 
 /**
@@ -243,7 +301,7 @@ export async function deleteAnalyzerImages(userId: string): Promise<void> {
     .list(prefix);
 
   if (listError) {
-    console.error("[upload] List error for deletion (analyzer):", listError);
+    logger.error("[upload] List error for deletion (analyzer)", listError);
     throw new UploadError(
       500,
       `Failed to list images for deletion: ${listError.message}`,
@@ -259,7 +317,7 @@ export async function deleteAnalyzerImages(userId: string): Promise<void> {
     .remove(paths);
 
   if (deleteError) {
-    console.error("[upload] Delete error (analyzer):", deleteError);
+    logger.error("[upload] Delete error (analyzer)", deleteError);
     throw new UploadError(
       500,
       `Failed to delete analyzer images: ${deleteError.message}`,
@@ -292,16 +350,14 @@ export async function uploadProofImage(
     });
 
   if (error) {
-    console.error("[upload] Supabase storage error (proof):", error);
+    logger.error("[upload] Supabase storage error (proof)", error);
     throw new UploadError(500, `Upload failed: ${error.message}`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabaseAdmin.storage.from(USER_UPLOADS_BUCKET).getPublicUrl(data.path);
+  const signedUrl = await getSignedUrl(data.path);
 
   return {
-    url: publicUrl,
+    url: signedUrl,
     path: data.path,
   };
 }

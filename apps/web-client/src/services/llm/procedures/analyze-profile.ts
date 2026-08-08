@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { analyzerSessions } from "@/services/verification/schema";
 import { analyzeProfile as callAnalyzeProfile } from "../client";
 import { fetchEnvironmentContext } from "@/services/environment";
+import { logger } from "@/lib/logger";
 
 // ── Input ───────────────────────────────────────────────────────────────
 
@@ -17,7 +18,10 @@ export const analyzeProfileInput = z.object({
     .min(1, "At least 1 image is required")
     .max(10, "Maximum 10 images"),
   imageHash: z.string().min(1, "imageHash is required"),
-  hintTags: z.array(z.string()).max(20).optional().default([]),
+  // .max(20) bounded the count but not each element, so a caller could send 20
+  // strings of a megabyte each and have all of it interpolated into a prompt
+  // that we pay per token to process. 60 characters is well past any real tag.
+  hintTags: z.array(z.string().max(60)).max(20).optional().default([]),
   useMock: z.boolean().optional().default(false),
   /** Optional location — triggers environmental context enrichment */
   location: z
@@ -81,7 +85,7 @@ export const analyzeProfile = authedProcedure
 
       return { session, meta };
     } catch (error) {
-      console.error("❌ analyzeProfile failed:", error);
+      logger.error("analyzeProfile failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:

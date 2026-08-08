@@ -5,6 +5,8 @@
  * Manages auth token injection, base64 image conversion, and error handling.
  */
 
+import { getRequestUserId } from "@/server/request-context";
+
 const LLM_BASE_URL = process.env.LLM_URL || "http://localhost:3001";
 const LLM_SERVICE_TOKEN = process.env.LLM_SERVICE_TOKEN || "";
 
@@ -192,6 +194,18 @@ async function llmFetch<T>(
     headers["X-Service-Token"] = LLM_SERVICE_TOKEN;
   }
 
+  // Lets the LLM service rate-limit per user instead of per IP.
+  //
+  // Every request to that service originates from this server, so keying its
+  // limiter on the socket address puts all users in one global bucket — one
+  // person streaming webcam frames to the realtime coach would 429 everyone
+  // else. This header is only trusted because X-Service-Token proves the
+  // request came from us; the service ignores it otherwise.
+  const endUserId = getRequestUserId();
+  if (endUserId) {
+    headers["X-End-User-Id"] = endUserId;
+  }
+
   const res = await fetch(url, {
     method: "POST",
     headers,
@@ -216,12 +230,83 @@ async function llmFetch<T>(
 // ============================================================================
 
 /**
+ * Hosts this server is willing to fetch images from.
+ *
+ * Derived from the configured Supabase URL, which is the only place uploads
+ * actually live. Anything else is rejected.
+ */
+function allowedImageHosts(): Set<string> {
+  const hosts = new Set<string>();
+  const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (supabase) {
+    try {
+      hosts.add(new URL(supabase).host);
+    } catch {
+      // Malformed config: fall through to an empty allowlist, which rejects
+      // everything rather than failing open.
+    }
+  }
+  return hosts;
+}
+
+/**
+ * Reject anything pointing at the loopback, link-local or private ranges.
+ * 169.254.169.254 is the cloud metadata endpoint and the classic SSRF target.
+ */
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().split(":")[0];
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".internal")) {
+    return true;
+  }
+  return (
+    /^127\./.test(h) ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^169\.254\./.test(h) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h) ||
+    h === "0.0.0.0" ||
+    h === "::1"
+  );
+}
+
+/**
  * Fetch an image from a URL (e.g. Supabase Storage) and convert to base64.
+ *
+ * This runs server-side on a URL that originated from user input, so it is a
+ * textbook SSRF sink. Previously it fetched anything it was given, with no
+ * timeout: an authenticated user could submit http://169.254.169.254/... as a
+ * "photo" and have the server fetch it, base64 it, and hand it to a vision
+ * model that will happily read it back out.
  */
 export async function imageUrlToBase64(
   imageUrl: string,
 ): Promise<{ base64: string; mimeType: string }> {
-  const res = await fetch(imageUrl);
+  let parsed: URL;
+  try {
+    parsed = new URL(imageUrl);
+  } catch {
+    throw new Error("Invalid image URL");
+  }
+
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`Unsupported image URL protocol: ${parsed.protocol}`);
+  }
+
+  if (isPrivateHost(parsed.host)) {
+    throw new Error("Refusing to fetch image from a private address");
+  }
+
+  const allowed = allowedImageHosts();
+  if (!allowed.has(parsed.host)) {
+    throw new Error(`Image host not allowed: ${parsed.host}`);
+  }
+
+  // Without a timeout a slow or hanging target holds this request, and the
+  // tRPC request above it, open indefinitely.
+  const res = await fetch(parsed.toString(), {
+    signal: AbortSignal.timeout(10_000),
+    redirect: "error",
+  });
   if (!res.ok) {
     throw new Error(`Failed to fetch image: ${imageUrl} (${res.status})`);
   }
@@ -396,13 +481,34 @@ export async function getLiveSuggestion(input: {
 // Vibe Match
 // ============================================================================
 
+/**
+ * One entry in the vibe-match ranking.
+ *
+ * The declared return type here used to be `LLMResponse<LLMVibeProfileData[]>`,
+ * which described neither the envelope nor the element shape: the service
+ * returns `{ topMatches, meta }` at the top level — not wrapped in `data` — and
+ * each entry nests the profile under a `profile` key alongside the model's
+ * narrative. Callers compensated with chains of optional-chained fallbacks and
+ * `as any`. Typing it accurately is what lets the procedure above reason about
+ * which candidates came back.
+ */
+export type VibeMatchEntry = {
+  profile: ProfileSummary;
+  narrative: string | null;
+};
+
+export type VibeMatchResponse = {
+  topMatches: VibeMatchEntry[];
+  meta?: LLMResponse<unknown>["meta"];
+};
+
 export async function vibeMatch(input: {
   profile: ProfileSummary;
   otherUsers: ProfileSummary[];
   limit: number;
   vectorSimilarity?: number;
   useMock?: boolean;
-}): Promise<LLMResponse<LLMVibeProfileData[]>> {
+}): Promise<VibeMatchResponse> {
   const endpoints = input.useMock
     ? ["/api/vibe-match/mock", "/api/vibe-match", "/api/vibe-match/top"]
     : ["/api/vibe-match", "/api/vibe-match/top"];
@@ -411,11 +517,14 @@ export async function vibeMatch(input: {
 
   for (const endpoint of endpoints) {
     try {
-      return await llmFetch<LLMVibeProfileData[]>(endpoint, {
+      // Cast through unknown: llmFetch always wraps in LLMResponse<T>, but this
+      // one endpoint returns its payload unwrapped, so the envelope types do
+      // not overlap.
+      return (await llmFetch<unknown>(endpoint, {
         profile: input.profile,
         otherUsers: input.otherUsers,
         vectorSimilarity: input.vectorSimilarity,
-      });
+      })) as unknown as VibeMatchResponse;
     } catch (error) {
       if (error instanceof LLMServiceError && error.statusCode === 404) {
         lastError = error;
@@ -429,4 +538,49 @@ export async function vibeMatch(input: {
     lastError ??
     new Error("No compatible vibe-match endpoint found on LLM service")
   );
+}
+
+// ============================================================================
+// Embeddings
+// ============================================================================
+
+/**
+ * Vector for a vibe profile, used by every similarity query.
+ *
+ * Proxied through the LLM service because OPENAI_API_KEY lives there.
+ */
+export async function generateEmbedding(
+  text: string,
+): Promise<LLMResponse<{ embedding: number[]; dimensions: number }>> {
+  return llmFetch<{ embedding: number[]; dimensions: number }>(
+    "/api/embeddings",
+    { text },
+  );
+}
+
+// ============================================================================
+// Sample persona replies
+// ============================================================================
+
+export type PersonaReplyInput = {
+  persona: {
+    vibeName: string;
+    vibeSummary?: string;
+    energy?: "chill" | "moderate" | "high" | "chaotic";
+    moodTags?: string[];
+    interestTags?: string[];
+  };
+  history: Array<{ role: "persona" | "user"; content: string }>;
+};
+
+/**
+ * One in-character chat reply from a seeded sample profile.
+ *
+ * See apps/llm/src/routes/persona-reply.ts for the constraints the prompt puts
+ * on it — chiefly that it must not claim to be a real person or arrange to meet.
+ */
+export async function generatePersonaReply(
+  input: PersonaReplyInput,
+): Promise<LLMResponse<{ reply: string }>> {
+  return llmFetch<{ reply: string }>("/api/persona-reply", input);
 }

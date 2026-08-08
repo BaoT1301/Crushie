@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { authedProcedure, publicProcedure } from "@/server/init";
 import { z } from "zod";
 import { examples } from "../schema";
@@ -78,16 +79,33 @@ export const update = authedProcedure
 export const deleteExample = authedProcedure
   .input(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    await ctx.secureDb!.rls(async (tx) => {
+    // .returning() so a delete that matched nothing is detectable. Under RLS a
+    // row the caller cannot see is indistinguishable from one that is absent,
+    // and both used to report success.
+    const deleted = await ctx.secureDb!.rls(async (tx) => {
       return tx
         .delete(examples)
-        .where(
-          and(eq(examples.id, input.id), eq(examples.userId, ctx.user.id)),
-        );
+        .where(and(eq(examples.id, input.id), eq(examples.userId, ctx.user.id)))
+        .returning({ id: examples.id });
     });
+
+    if (!deleted.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Example not found" });
+    }
+
     return { success: true };
   });
 
+/**
+ * The one deliberate use of the unscoped client.
+ *
+ * Every other data path goes through `ctx.secureDb.rls()`, because without
+ * request.jwt.claims the `crushie_app` role sees nothing. This is a
+ * publicProcedure with no caller identity to set, and it reads only rows that
+ * are public by definition — which the `examples` SELECT policy also permits
+ * via its `OR is_public = TRUE` arm, so RLS still agrees with the predicate
+ * rather than being bypassed by it.
+ */
 export const listPublic = publicProcedure.query(async ({ ctx }) => {
   return ctx.db
     .select()

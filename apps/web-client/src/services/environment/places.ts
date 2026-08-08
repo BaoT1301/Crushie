@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * Places Service — Google Places API integration
  *
@@ -63,7 +64,7 @@ export async function fetchNearbyPlaces(
   lng: number,
 ): Promise<PlaceResult[] | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn("⚠️  GOOGLE_MAPS_API_KEY not set — skipping places fetch");
+    logger.warn("GOOGLE_MAPS_API_KEY not set — skipping places fetch");
     return null;
   }
 
@@ -80,7 +81,7 @@ export async function fetchNearbyPlaces(
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
 
     if (!res.ok) {
-      console.error(`❌ Google Places API returned ${res.status}`);
+      logger.error(`❌ Google Places API returned ${res.status}`);
       return null;
     }
 
@@ -110,7 +111,7 @@ export async function fetchNearbyPlaces(
       ),
     }));
   } catch (error) {
-    console.error("❌ Places fetch failed:", error);
+    logger.error("Places fetch failed", error);
     return null;
   }
 }

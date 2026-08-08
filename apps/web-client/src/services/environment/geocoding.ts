@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * Geocoding Service — Google Places Autocomplete & Geocoding API
  *
@@ -50,7 +51,7 @@ export async function searchCities(query: string): Promise<CitySuggestion[]> {
     });
 
     if (!res.ok) {
-      console.error(`❌ Places Autocomplete returned ${res.status}`);
+      logger.error(`❌ Places Autocomplete returned ${res.status}`);
       return [];
     }
 
@@ -77,7 +78,7 @@ export async function searchCities(query: string): Promise<CitySuggestion[]> {
       }))
       .slice(0, 5);
   } catch (error) {
-    console.error("❌ City search failed:", error);
+    logger.error("City search failed", error);
     return [];
   }
 }
@@ -101,7 +102,7 @@ export async function geocodePlace(
     });
 
     if (!res.ok) {
-      console.error(`❌ Geocoding API returned ${res.status}`);
+      logger.error(`❌ Geocoding API returned ${res.status}`);
       return null;
     }
 
@@ -121,7 +122,7 @@ export async function geocodePlace(
       formattedAddress: result.formatted_address,
     };
   } catch (error) {
-    console.error("❌ Geocoding failed:", error);
+    logger.error("Geocoding failed", error);
     return null;
   }
 }

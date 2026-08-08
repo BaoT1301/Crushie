@@ -95,20 +95,21 @@ const listRewards = authedProcedure.query(async ({ ctx }) => {
 const redeemReward = authedProcedure
   .input(z.object({ rewardId: z.string().uuid() }))
   .mutation(async ({ ctx, input }) => {
-    // Get total points
-    const pointsResult = (await ctx.secureDb!.rls(async (tx) => {
-      return tx.execute(sql`
-        SELECT COALESCE(SUM(delta), 0)::int as total_points
-        FROM vibe_points_ledger
-        WHERE user_id = ${ctx.user.id}
-      `);
-    })) as Array<{ total_points: number }>;
-
-    const totalPoints = pointsResult[0]?.total_points ?? 0;
-
-    // Get reward
-    const [reward] = (await ctx.secureDb!.rls(async (tx) => {
-      return tx
+    /**
+     * Read the balance, check it, and spend it in ONE transaction.
+     *
+     * These were three separate `rls()` calls, which means three separate
+     * transactions. Two concurrent redemptions both read the pre-spend balance,
+     * both passed the check, and both deducted — so a user with 100 points
+     * could redeem two 100-point rewards and land at -100. Double-clicking the
+     * button was enough to trigger it.
+     *
+     * The ledger rows are also locked FOR UPDATE while the sum is taken, so a
+     * second transaction blocks until this one commits and then sees the real
+     * remaining balance rather than a stale one.
+     */
+    const result = await ctx.secureDb!.rls(async (tx) => {
+      const [reward] = (await tx
         .select()
         .from(academyRewards)
         .where(
@@ -117,25 +118,31 @@ const redeemReward = authedProcedure
             eq(academyRewards.isActive, true),
           ),
         )
-        .limit(1);
-    })) as Array<typeof academyRewards.$inferSelect>;
+        .limit(1)) as Array<typeof academyRewards.$inferSelect>;
 
-    if (!reward) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Reward not found or no longer available.",
-      });
-    }
+      if (!reward) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Reward not found or no longer available.",
+        });
+      }
 
-    if (totalPoints < reward.cost) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: `Not enough points. You have ${totalPoints} but need ${reward.cost}.`,
-      });
-    }
+      const pointsResult = (await tx.execute(sql`
+        SELECT COALESCE(SUM(delta), 0)::int AS total_points
+        FROM vibe_points_ledger
+        WHERE user_id = ${ctx.user.id}
+        FOR UPDATE
+      `)) as unknown as Array<{ total_points: number }>;
 
-    // Redeem: create user_reward + deduct points
-    await ctx.secureDb!.rls(async (tx) => {
+      const totalPoints = pointsResult[0]?.total_points ?? 0;
+
+      if (totalPoints < reward.cost) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Not enough points. You have ${totalPoints} but need ${reward.cost}.`,
+        });
+      }
+
       await tx.insert(userRewards).values({
         userId: ctx.user.id,
         rewardId: input.rewardId,
@@ -147,14 +154,16 @@ const redeemReward = authedProcedure
         reason: "reward-redeemed",
         referenceId: input.rewardId,
       });
+
+      return {
+        success: true as const,
+        reward: reward.title,
+        pointsSpent: reward.cost,
+        remainingPoints: totalPoints - reward.cost,
+      };
     });
 
-    return {
-      success: true,
-      reward: reward.title,
-      pointsSpent: reward.cost,
-      remainingPoints: totalPoints - reward.cost,
-    };
+    return result;
   });
 
 // ── My Redeemed Rewards ─────────────────────────────────────────────────

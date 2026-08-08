@@ -8,6 +8,7 @@
 import { authedProcedure } from "@/server/init";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { logger } from "@/lib/logger";
 import {
   uploadOnboardImage,
   getOnboardImageUrls,
@@ -45,7 +46,7 @@ export const uploadOnboardImageProcedure = authedProcedure
         input.mimeType,
       );
     } catch (error) {
-      console.error("❌ uploadOnboardImage failed:", error);
+      logger.error("uploadOnboardImage failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
@@ -59,7 +60,7 @@ export const getOnboardImagesProcedure = authedProcedure.query(
     try {
       return await getOnboardImageUrls(ctx.user.id);
     } catch (error) {
-      console.error("❌ getOnboardImages failed:", error);
+      logger.error("getOnboardImages failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
@@ -77,7 +78,7 @@ export const deleteOnboardImagesProcedure = authedProcedure.mutation(
       await deleteOnboardImages(ctx.user.id);
       return { success: true };
     } catch (error) {
-      console.error("❌ deleteOnboardImages failed:", error);
+      logger.error("deleteOnboardImages failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:

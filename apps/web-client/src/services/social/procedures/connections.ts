@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { authedProcedure } from "@/server/init";
 import { z } from "zod";
 import { connections } from "../schema";
@@ -147,9 +148,15 @@ export const updateConnection = authedProcedure
         .where(
           and(
             eq(connections.id, input.connectionId),
-            or(
-              eq(connections.requesterId, ctx.user.id),
-              eq(connections.addresseeId, ctx.user.id),
+            // Accepting is the addressee's decision alone. Allowing either
+            // party through here let a requester accept their own outgoing
+            // request, which defeats the consent step entirely. Blocking stays
+            // available to both sides.
+            input.status === "accepted"
+              ? eq(connections.addresseeId, ctx.user.id)
+              : or(
+                  eq(connections.requesterId, ctx.user.id),
+                  eq(connections.addresseeId, ctx.user.id),
             ),
           ),
         )
@@ -161,7 +168,9 @@ export const updateConnection = authedProcedure
 export const removeConnection = authedProcedure
   .input(z.object({ connectionId: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    await ctx.secureDb!.rls(async (tx) => {
+    // .returning() so a no-op delete is detectable rather than reported as
+    // success — under RLS an unreachable row looks exactly like a missing one.
+    const deleted = await ctx.secureDb!.rls(async (tx) => {
       return tx
         .delete(connections)
         .where(
@@ -169,7 +178,16 @@ export const removeConnection = authedProcedure
             eq(connections.id, input.connectionId),
             eq(connections.requesterId, ctx.user.id),
           ),
-        );
+        )
+        .returning({ id: connections.id });
     });
+
+    if (!deleted.length) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Connection not found",
+      });
+    }
+
     return { success: true };
   });

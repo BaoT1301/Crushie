@@ -4,7 +4,6 @@ import { isVerified } from "./is-verified";
 import { request } from "./request";
 import { requestVerification } from "./request-verification";
 import { getBadges } from "./get-badges";
-import { analyze } from "./analyze";
 import { listAnalyzerSessions, getAnalyzerSession } from "./analyzer-sessions";
 
 export const verificationRouter = createTRPCRouter({
@@ -13,7 +12,6 @@ export const verificationRouter = createTRPCRouter({
   request,
   requestVerification,
   getBadges,
-  analyze,
   listAnalyzerSessions,
   getAnalyzerSession,
 });

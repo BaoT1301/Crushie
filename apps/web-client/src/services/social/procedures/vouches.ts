@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { authedProcedure } from "@/server/init";
 import { z } from "zod";
 import { vibeVouches } from "../schema";
@@ -48,7 +49,9 @@ export const giveVouch = authedProcedure
 export const removeVouch = authedProcedure
   .input(z.object({ vouchId: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    await ctx.secureDb!.rls(async (tx) => {
+    // .returning() so a no-op delete is detectable rather than reported as
+    // success — under RLS an unreachable row looks exactly like a missing one.
+    const deleted = await ctx.secureDb!.rls(async (tx) => {
       return tx
         .delete(vibeVouches)
         .where(
@@ -56,8 +59,14 @@ export const removeVouch = authedProcedure
             eq(vibeVouches.id, input.vouchId),
             eq(vibeVouches.voucherId, ctx.user.id),
           ),
-        );
+        )
+        .returning({ id: vibeVouches.id });
     });
+
+    if (!deleted.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Vouch not found" });
+    }
+
     return { success: true };
   });
 

@@ -13,6 +13,7 @@ import { environmentRouter } from "@/services/environment/procedures";
 import { realtimeRouter } from "@/services/realtime/procedures";
 import { chatRouter } from "@/services/chat/procedures";
 import { academyRouter } from "@/services/academy/procedures";
+import { logger } from "@/lib/logger";
 
 export const appRouter = createTRPCRouter({
   hello: publicProcedure
@@ -23,7 +24,7 @@ export const appRouter = createTRPCRouter({
           greeting: `Hello ${input.text}!`,
         };
       } catch (error) {
-        console.error("Error in hello procedure:", error);
+        logger.error("Error in hello procedure", error);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: error instanceof Error ? error.message : String(error),
@@ -39,7 +40,7 @@ export const appRouter = createTRPCRouter({
         userId: ctx.user.id,
       };
     } catch (error) {
-      console.error("Error in protectedHello procedure:", error);
+      logger.error("Error in protectedHello procedure", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: error instanceof Error ? error.message : String(error),

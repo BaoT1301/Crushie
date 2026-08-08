@@ -7,6 +7,7 @@
 import { authedProcedure } from "@/server/init";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { logger } from "@/lib/logger";
 import {
   uploadProofImage,
   validateImageFile,
@@ -33,7 +34,7 @@ export const uploadProofImageProcedure = authedProcedure
         input.mimeType,
       );
     } catch (error) {
-      console.error("❌ uploadProofImage failed:", error);
+      logger.error("uploadProofImage failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:
