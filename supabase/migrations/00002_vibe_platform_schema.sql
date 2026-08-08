@@ -340,7 +340,7 @@ ALTER TABLE vibe_profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own vibe profile"
   ON vibe_profiles FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can read active vibe profiles for matching"
   ON vibe_profiles FOR SELECT
@@ -348,41 +348,41 @@ CREATE POLICY "Users can read active vibe profiles for matching"
 
 CREATE POLICY "Users can insert own vibe profile"
   ON vibe_profiles FOR INSERT
-  WITH CHECK (user_id = auth.user_id());
+  WITH CHECK (user_id = public.user_id());
 
 CREATE POLICY "Users can update own vibe profile"
   ON vibe_profiles FOR UPDATE
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can delete own vibe profile"
   ON vibe_profiles FOR DELETE
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 -- 15b. connections
 ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own connections"
   ON connections FOR SELECT
-  USING (requester_id = auth.user_id() OR addressee_id = auth.user_id());
+  USING (requester_id = public.user_id() OR addressee_id = public.user_id());
 
 CREATE POLICY "Users can create connection requests"
   ON connections FOR INSERT
-  WITH CHECK (requester_id = auth.user_id());
+  WITH CHECK (requester_id = public.user_id());
 
 CREATE POLICY "Users can update connections they're part of"
   ON connections FOR UPDATE
-  USING (requester_id = auth.user_id() OR addressee_id = auth.user_id());
+  USING (requester_id = public.user_id() OR addressee_id = public.user_id());
 
 CREATE POLICY "Users can delete own sent requests"
   ON connections FOR DELETE
-  USING (requester_id = auth.user_id());
+  USING (requester_id = public.user_id());
 
 -- 15c. vibe_matches
 ALTER TABLE vibe_matches ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own matches"
   ON vibe_matches FOR SELECT
-  USING (user_a_id = auth.user_id() OR user_b_id = auth.user_id());
+  USING (user_a_id = public.user_id() OR user_b_id = public.user_id());
 
 -- Matches are created by the system (service role), not directly by users
 -- No INSERT/UPDATE/DELETE policies for regular users
@@ -404,7 +404,7 @@ CREATE POLICY "Users can read mission instances for their matches"
   USING (
     match_id IN (
       SELECT id FROM vibe_matches
-      WHERE user_a_id = auth.user_id() OR user_b_id = auth.user_id()
+      WHERE user_a_id = public.user_id() OR user_b_id = public.user_id()
     )
   );
 
@@ -413,7 +413,7 @@ CREATE POLICY "Users can update mission instances for their matches"
   USING (
     match_id IN (
       SELECT id FROM vibe_matches
-      WHERE user_a_id = auth.user_id() OR user_b_id = auth.user_id()
+      WHERE user_a_id = public.user_id() OR user_b_id = public.user_id()
     )
   );
 
@@ -422,26 +422,26 @@ ALTER TABLE user_mission_progress ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own mission progress"
   ON user_mission_progress FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can insert own mission progress"
   ON user_mission_progress FOR INSERT
-  WITH CHECK (user_id = auth.user_id());
+  WITH CHECK (user_id = public.user_id());
 
 CREATE POLICY "Users can update own mission progress"
   ON user_mission_progress FOR UPDATE
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 -- 15g. verifications
 ALTER TABLE verifications ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own verifications"
   ON verifications FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can request own verifications"
   ON verifications FOR INSERT
-  WITH CHECK (user_id = auth.user_id());
+  WITH CHECK (user_id = public.user_id());
 
 -- Verification status updated by service role only
 
@@ -450,49 +450,49 @@ ALTER TABLE vibe_vouches ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read vouches about themselves"
   ON vibe_vouches FOR SELECT
-  USING (subject_id = auth.user_id());
+  USING (subject_id = public.user_id());
 
 CREATE POLICY "Users can read vouches they gave"
   ON vibe_vouches FOR SELECT
-  USING (voucher_id = auth.user_id());
+  USING (voucher_id = public.user_id());
 
 CREATE POLICY "Users can create vouches for connections"
   ON vibe_vouches FOR INSERT
-  WITH CHECK (voucher_id = auth.user_id());
+  WITH CHECK (voucher_id = public.user_id());
 
 CREATE POLICY "Users can delete own vouches"
   ON vibe_vouches FOR DELETE
-  USING (voucher_id = auth.user_id());
+  USING (voucher_id = public.user_id());
 
 -- 15i. crush_list
 ALTER TABLE crush_list ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own crush list"
   ON crush_list FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can manage own crush list"
   ON crush_list FOR INSERT
-  WITH CHECK (user_id = auth.user_id());
+  WITH CHECK (user_id = public.user_id());
 
 CREATE POLICY "Users can update own crush list"
   ON crush_list FOR UPDATE
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can delete from own crush list"
   ON crush_list FOR DELETE
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 -- 15j. analyzer_sessions
 ALTER TABLE analyzer_sessions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own analyzer sessions"
   ON analyzer_sessions FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can create own analyzer sessions"
   ON analyzer_sessions FOR INSERT
-  WITH CHECK (user_id = auth.user_id());
+  WITH CHECK (user_id = public.user_id());
 
 -- Analyzer sessions are append-only (no update/delete)
 
@@ -501,6 +501,6 @@ ALTER TABLE vibe_points_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own points ledger"
   ON vibe_points_ledger FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 -- Points awarded by service role only

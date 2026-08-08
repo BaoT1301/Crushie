@@ -57,7 +57,7 @@ CREATE POLICY "Users can read messages in their matches"
     EXISTS (
       SELECT 1 FROM vibe_matches
       WHERE vibe_matches.id = direct_messages.match_id
-        AND (vibe_matches.user_a_id = auth.user_id() OR vibe_matches.user_b_id = auth.user_id())
+        AND (vibe_matches.user_a_id = public.user_id() OR vibe_matches.user_b_id = public.user_id())
     )
   );
 
@@ -65,11 +65,11 @@ CREATE POLICY "Users can read messages in their matches"
 CREATE POLICY "Users can send messages in their matches"
   ON direct_messages FOR INSERT
   WITH CHECK (
-    sender_id = auth.user_id()
+    sender_id = public.user_id()
     AND EXISTS (
       SELECT 1 FROM vibe_matches
       WHERE vibe_matches.id = direct_messages.match_id
-        AND (vibe_matches.user_a_id = auth.user_id() OR vibe_matches.user_b_id = auth.user_id())
+        AND (vibe_matches.user_a_id = public.user_id() OR vibe_matches.user_b_id = public.user_id())
     )
   );
 
@@ -149,11 +149,11 @@ ALTER TABLE user_rewards ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users can read own redeemed rewards"
   ON user_rewards FOR SELECT
-  USING (user_id = auth.user_id());
+  USING (user_id = public.user_id());
 
 CREATE POLICY "Users can redeem rewards"
   ON user_rewards FOR INSERT
-  WITH CHECK (user_id = auth.user_id());
+  WITH CHECK (user_id = public.user_id());
 
 -- ============================================================
 -- 6. Enable Supabase Realtime for direct_messages

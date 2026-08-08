@@ -9,7 +9,7 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 VALUES (
   'user-uploads',
   'user-uploads',
-  TRUE,                                           -- public read access
+  TRUE,                                           -- locked down by 00006 immediately after
   10485760,                                       -- 10 MB per file
   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/heic']
 )
@@ -18,7 +18,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 2. RLS policies for storage.objects
 --    (Supabase Storage uses the `storage.objects` table internally)
 
--- Allow anyone to read (public bucket)
+-- Superseded by 00006_private_uploads.sql, which flips this bucket to private
+-- and replaces this policy with an owner-scoped one. Kept as-is so the
+-- migration history stays honest about what was originally created.
 CREATE POLICY "Public read access on user-uploads"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'user-uploads');
