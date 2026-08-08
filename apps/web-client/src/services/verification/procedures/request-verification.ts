@@ -7,7 +7,13 @@ import { verifications } from "../schema";
 import { imageUrlToBase64, verifyIdentity } from "@/services/llm/client";
 
 const requestVerificationInput = z.object({
-  selfieBase64: z.string().min(1, "Selfie image data is required"),
+  // Bounded to match the LLM service's own body limit. Unbounded, this layer
+  // would buffer an arbitrarily large payload and forward it to a paid vision
+  // call before anything downstream got the chance to reject it.
+  selfieBase64: z
+    .string()
+    .min(1, "Selfie image data is required")
+    .max(4_000_000, "Selfie image is too large"),
   selfieMimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
 });
 
@@ -64,7 +70,6 @@ export const requestVerification = authedProcedure
             isMatch: data.is_match,
           },
           verifiedAt: status === "verified" ? new Date() : undefined,
-          lastVerifiedAt: status === "verified" ? new Date() : undefined,
           expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         });
 

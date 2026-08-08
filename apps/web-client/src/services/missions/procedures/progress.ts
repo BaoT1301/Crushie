@@ -6,7 +6,7 @@ import {
   missionInstances,
   userMissionProgress,
 } from "../schema";
-import { vibePointsLedger } from "@/services/social/schema";
+import { vibePointsLedger, vibeMatches } from "@/services/social/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export const completeObjective = authedProcedure
@@ -71,6 +71,35 @@ export const checkin = authedProcedure
           ),
         );
 
+      const [instance] = await tx
+        .select()
+        .from(missionInstances)
+        .where(eq(missionInstances.id, input.instanceId))
+        .limit(1);
+
+      if (!instance) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Mission instance not found.",
+        });
+      }
+
+      const [match] = await tx
+        .select({
+          userAId: vibeMatches.userAId,
+          userBId: vibeMatches.userBId,
+        })
+        .from(vibeMatches)
+        .where(eq(vibeMatches.id, instance.matchId))
+        .limit(1);
+
+      if (!match) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Mission is not attached to a match.",
+        });
+      }
+
       const progress = await tx
         .select()
         .from(userMissionProgress)
@@ -83,22 +112,30 @@ export const checkin = authedProcedure
         });
       }
 
-      const allCheckedIn = progress.every((p) => p.checkedIn);
+      /**
+       * Completion is decided against the match's actual participants, not
+       * against `progress.every(...)`.
+       *
+       * `every()` is true for an empty or partial array. The RLS policy on
+       * user_mission_progress used to be `USING (user_id = public.user_id())`,
+       * so this query could only ever return the caller's own row — which they
+       * had just checked in two statements earlier. Every solo check-in
+       * therefore completed a two-person mission and paid out both sides.
+       *
+       * Migration 00014 widens the policy so both rows are visible, but the
+       * invariant should not depend on a policy staying exactly right. Deriving
+       * the expected participants from the match makes a missing row read as
+       * "not done yet" instead of "unanimously done".
+       */
+      const expectedParticipants = [match.userAId, match.userBId];
+      const checkedInUserIds = new Set(
+        progress.filter((p) => p.checkedIn).map((p) => p.userId),
+      );
+      const allCheckedIn = expectedParticipants.every((userId) =>
+        checkedInUserIds.has(userId),
+      );
 
       if (allCheckedIn) {
-        const [instance] = await tx
-          .select()
-          .from(missionInstances)
-          .where(eq(missionInstances.id, input.instanceId))
-          .limit(1);
-
-        if (!instance) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Mission instance not found.",
-          });
-        }
-
         const [template] = await tx
           .select()
           .from(missionTemplates)

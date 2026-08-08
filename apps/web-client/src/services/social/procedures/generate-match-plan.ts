@@ -154,7 +154,21 @@ async function resolveLocationFromAnalyzerCity(city: string) {
   return geocodePlace(bestMatch.placeId);
 }
 
-async function getOrCreateAiTemplate(tx: any) {
+/**
+ * Looks up the template every AI-generated match plan hangs its mission off.
+ *
+ * This used to insert the row when it was missing, which could never work:
+ * mission_templates is catalogue content and deliberately has no INSERT policy
+ * (see 00008), so the write failed with 42501 every time — and it ran *after*
+ * the LLM call, so each attempt burned a paid completion before dying. Because
+ * every template seeded by 00007 is generated_by = 'manual', the lookup never
+ * matched and the doomed insert path was the only path.
+ *
+ * The row is now seeded by migration 00014. Its absence means migrations have
+ * not been applied, which is an operator problem, so it fails loudly here
+ * rather than being papered over with a write that cannot succeed.
+ */
+async function getAiTemplateOrThrow(tx: any) {
   const [existingTemplate] = await tx
     .select()
     .from(missionTemplates)
@@ -162,25 +176,14 @@ async function getOrCreateAiTemplate(tx: any) {
     .orderBy(desc(missionTemplates.createdAt))
     .limit(1);
 
-  if (existingTemplate) return existingTemplate;
+  if (!existingTemplate) {
+    throw new Error(
+      "No mission template with generated_by = 'ai-match-plan'. " +
+        "Apply supabase/migrations/00014_schema_drift_and_partner_policies.sql.",
+    );
+  }
 
-  const [createdTemplate] = await tx
-    .insert(missionTemplates)
-    .values({
-      title: "Valentine Mission",
-      description: "AI-generated interaction mission for a matched pair",
-      missionType: "mini_date",
-      difficulty: "medium",
-      locationQuery: "local aesthetic places",
-      basePoints: 180,
-      durationMin: 90,
-      objectives: [],
-      generatedBy: "ai-match-plan",
-      isActive: true,
-    })
-    .returning();
-
-  return createdTemplate;
+  return existingTemplate;
 }
 
 async function getMatchOrThrow(
@@ -541,7 +544,7 @@ export const generateMatchPlan = authedProcedure
     });
 
     const missionRecord = await ctx.secureDb!.rls(async (tx) => {
-      const template = await getOrCreateAiTemplate(tx);
+      const template = await getAiTemplateOrThrow(tx);
 
       const [createdInstance] = await tx
         .insert(missionInstances)

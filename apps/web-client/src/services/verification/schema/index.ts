@@ -54,7 +54,12 @@ export const verifications = pgTable(
       .defaultNow()
       .notNull(),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
-    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+    // NOTE: there is deliberately no last_verified_at here. This model used to
+    // declare one, but the column exists only on `users` (added in 00004), never
+    // on this table, so every insert failed with `column "last_verified_at" of
+    // relation "verifications" does not exist` — after the paid vision call had
+    // already been made. On a per-attempt row, verified_at already carries the
+    // same information; "last" is a property of the user, not of one attempt.
     expiresAt: timestamp("expires_at", { withTimezone: true }),
   },
   (table) => [
