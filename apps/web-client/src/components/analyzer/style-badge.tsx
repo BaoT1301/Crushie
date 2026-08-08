@@ -22,7 +22,7 @@ export function StyleBadge({ style }: StyleBadgeProps) {
         <div className="text-left">
           <p className="text-muted-foreground text-sm">Communication Style</p>
           <p
-            className={`text-2xl font-bold bg-linear-to-r ${config.gradient} bg-clip-text text-transparent capitalize`}
+            className={"text-2xl font-bold text-primary capitalize"}
           >
             {style}
           </p>

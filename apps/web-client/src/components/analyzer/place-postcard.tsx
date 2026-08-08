@@ -46,7 +46,7 @@ export function PlacePostcard({ place, index = 0 }: PlacePostcardProps) {
               {place.name}
             </h4>
             {place.rating && (
-              <span className="flex items-center gap-0.5 text-xs text-chart-4 shrink-0">
+              <span className="flex items-center gap-0.5 text-xs text-primary shrink-0">
                 <Star className="w-3 h-3 fill-current" />
                 {place.rating.toFixed(1)}
               </span>

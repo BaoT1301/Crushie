@@ -86,7 +86,7 @@ export function HintTagSelector({
               <span>{category.emoji}</span>
               {category.label}
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 pointer-coarse:gap-2">
               {category.tags.map((tag) => {
                 const isSelected = selectedTags.includes(tag);
                 return (
@@ -95,7 +95,11 @@ export function HintTagSelector({
                     onClick={() => toggleTag(tag)}
                     disabled={disabled || (!isSelected && atLimit)}
                     className={cn(
-                      "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border",
+                      // These chips were 30px tall. There are ~30 of them in a
+                      // dense wrap, so a mis-tap selects the wrong tag rather
+                      // than nothing. Full height on touch, original density
+                      // under a cursor.
+                      "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 pointer-coarse:min-h-11",
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary shadow-sm"
                         : "bg-secondary/50 text-secondary-foreground border-border hover:bg-secondary hover:border-primary/30",
@@ -132,7 +136,10 @@ export function HintTagSelector({
             placeholder="Add extra context..."
             disabled={disabled || atLimit}
             className={cn(
-              "flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm text-foreground",
+              // text-base below md, matching ui/input.tsx: iOS Safari zooms the
+              // page on focus for any field under 16px, and never zooms back
+              // out on its own.
+              "flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-base text-foreground md:text-sm",
               "placeholder:text-muted-foreground",
               "focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
               "transition-all disabled:opacity-50 disabled:cursor-not-allowed",

@@ -75,6 +75,19 @@ export const GLASSES_CONFIG: Record<GlassesFrameType, GlassesConfig> = {
 
 /* ─── Language presets ─────────────────────────────────────────────────────── */
 
+/**
+ * Languages offered by the simulator's picker.
+ *
+ * `promptHint` is sent as the `language` field of `realtime.getLiveSuggestion`,
+ * where it is interpolated into the coach's instruction block. The server
+ * validates it as a length-bounded string rather than a fixed enum, so this
+ * list is free to grow without a matching server change — but keep the hints
+ * short and imperative, because that field is a prompt-injection surface and
+ * the length bound is the only thing constraining it.
+ *
+ * The native name reaches the user through `label`, so the hint itself stays
+ * plain English for the model.
+ */
 export const LANGUAGES: LanguageOption[] = [
   {
     code: "en",
@@ -88,77 +101,84 @@ export const LANGUAGES: LanguageOption[] = [
     speechCode: "vi-VN",
     label: "Tiếng Việt",
     flag: "🇻🇳",
-    promptHint: "Respond in Vietnamese (Tiếng Việt).",
+    promptHint: "Respond in Vietnamese.",
   },
   {
     code: "es",
     speechCode: "es-ES",
     label: "Español",
     flag: "🇪🇸",
-    promptHint: "Respond in Spanish (Español).",
+    promptHint: "Respond in Spanish.",
   },
   {
     code: "fr",
     speechCode: "fr-FR",
     label: "Français",
     flag: "🇫🇷",
-    promptHint: "Respond in French (Français).",
+    promptHint: "Respond in French.",
   },
   {
     code: "de",
     speechCode: "de-DE",
     label: "Deutsch",
     flag: "🇩🇪",
-    promptHint: "Respond in German (Deutsch).",
+    promptHint: "Respond in German.",
+  },
+  {
+    code: "it",
+    speechCode: "it-IT",
+    label: "Italiano",
+    flag: "🇮🇹",
+    promptHint: "Respond in Italian.",
   },
   {
     code: "ja",
     speechCode: "ja-JP",
     label: "日本語",
     flag: "🇯🇵",
-    promptHint: "Respond in Japanese (日本語).",
+    promptHint: "Respond in Japanese.",
   },
   {
     code: "ko",
     speechCode: "ko-KR",
     label: "한국어",
     flag: "🇰🇷",
-    promptHint: "Respond in Korean (한국어).",
+    promptHint: "Respond in Korean.",
   },
   {
     code: "zh",
     speechCode: "zh-CN",
     label: "中文",
     flag: "🇨🇳",
-    promptHint: "Respond in Mandarin Chinese (中文).",
+    promptHint: "Respond in Mandarin Chinese.",
   },
   {
     code: "pt",
     speechCode: "pt-BR",
     label: "Português",
     flag: "🇧🇷",
-    promptHint: "Respond in Portuguese (Português).",
+    promptHint: "Respond in Portuguese.",
   },
   {
     code: "th",
     speechCode: "th-TH",
     label: "ไทย",
     flag: "🇹🇭",
-    promptHint: "Respond in Thai (ไทย).",
+    promptHint: "Respond in Thai.",
   },
   {
     code: "hi",
     speechCode: "hi-IN",
     label: "हिन्दी",
     flag: "🇮🇳",
-    promptHint: "Respond in Hindi (हिन्दी).",
+    promptHint: "Respond in Hindi.",
   },
   {
     code: "ar",
     speechCode: "ar-SA",
     label: "العربية",
     flag: "🇸🇦",
-    promptHint: "Respond in Arabic (العربية).",
+    promptHint: "Respond in Arabic.",
   },
 ];
 

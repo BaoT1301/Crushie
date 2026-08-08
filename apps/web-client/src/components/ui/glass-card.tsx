@@ -78,17 +78,3 @@ interface GradientMaskProps {
   direction?: "bottom" | "top" | "both";
 }
 
-export function GradientMask({
-  children,
-  className,
-  direction = "bottom",
-}: GradientMaskProps) {
-  const maskClass =
-    direction === "bottom"
-      ? "gradient-mask-b"
-      : direction === "top"
-        ? "[mask-image:linear-gradient(to_top,black_75%,transparent_100%)]"
-        : "[mask-image:linear-gradient(transparent_0%,black_10%,black_90%,transparent_100%)]";
-
-  return <div className={cn(maskClass, className)}>{children}</div>;
-}

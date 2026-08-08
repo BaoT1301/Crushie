@@ -24,9 +24,11 @@ export function CrushieDisplay({
 }) {
   return (
     <div
-      className={`pointer-events-none flex flex-col gap-1 rounded-lg ${theme.border} border ${theme.panelBg} px-2.5 py-2 backdrop-blur-md`}
+      className={`pointer-events-none flex w-full flex-col gap-1 rounded-lg ${theme.border} border ${theme.panelBg} px-2.5 py-2 backdrop-blur-md`}
       style={{
-        maxWidth: "min(56%, 280px)",
+        // Width is set by the positioning wrapper in hud-overlay.tsx. A
+        // percentage here resolved against that shrink-to-fit wrapper instead
+        // of the lens and collapsed the panel to a single-word column.
         willChange: "transform",
         transform: "translateZ(0)",
         filter: `drop-shadow(0 0 8px ${theme.glow})`,

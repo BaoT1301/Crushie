@@ -145,7 +145,12 @@ export function useSpeechRecognition(
       if (autoVoiceEnabledRef.current) {
         window.setTimeout(() => {
           recognitionRef.current = null;
-          startListening();
+          // Via the ref, not a direct self-reference. Naming `startListening`
+          // inside its own useCallback body reads the binding before it is
+          // initialised — it happens to work because the timeout fires later,
+          // but it relies on timing rather than on the value existing. The ref
+          // is already kept in sync below and is what scheduleRestart uses.
+          startListeningRef.current();
         }, 250);
       }
     };
@@ -162,8 +167,17 @@ export function useSpeechRecognition(
     }
   }, [speechSupported, clearRestartTimer, scheduleRestart]);
 
-  // Keep ref in sync so scheduleRestart always calls the latest version
-  startListeningRef.current = startListening;
+  // Keep the ref in sync so scheduleRestart and the onend handler always call
+  // the latest version.
+  //
+  // Assigned in an effect rather than during render: writing `.current` while
+  // rendering is a side effect, and React may render without committing, which
+  // would leave the ref pointing at a callback from a discarded pass. Both
+  // readers fire from timers well after commit, so effect timing is soon
+  // enough.
+  useEffect(() => {
+    startListeningRef.current = startListening;
+  }, [startListening]);
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();

@@ -35,7 +35,7 @@ export function EnergyBadge({
       <span>{config.emoji}</span>
       <span
         className={cn(
-          "bg-clip-text text-transparent bg-linear-to-r",
+          "text-foreground",
           config.gradient,
         )}
       >

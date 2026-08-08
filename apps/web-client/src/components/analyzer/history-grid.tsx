@@ -26,8 +26,8 @@ export function AnalyzerHistoryGrid({
   if (sessions.length === 0 && !isLoading) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
-        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10">
-          <Sparkles className="h-5 w-5 text-rose-500" />
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+          <Sparkles className="h-5 w-5 text-primary" />
         </div>
         <p className="text-sm font-medium">No analysis history yet</p>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -48,7 +48,7 @@ export function AnalyzerHistoryGrid({
             transition={{ delay: idx * 0.05 }}
           >
             <Link href={`/analyze-profile/${session.id}`}>
-              <Card className="group h-full border-border/70 bg-card/80 transition-all hover:-translate-y-0.5 hover:border-rose-300/60 hover:shadow-lg">
+              <Card className="group h-full border-border/70 bg-card/80 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg">
                 <CardContent className="p-4 space-y-3">
                   {/* Style + time */}
                   <div className="flex items-center justify-between">
@@ -82,7 +82,7 @@ export function AnalyzerHistoryGrid({
                     ) : (
                       <span />
                     )}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-rose-500" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary" />
                   </div>
                 </CardContent>
               </Card>
@@ -109,7 +109,7 @@ export function AnalyzerHistoryGrid({
           <Button
             onClick={onLoadMore}
             variant="outline"
-            className="border-rose-200 hover:bg-rose-50"
+            className="border-primary/30 hover:bg-primary/10"
           >
             Load more
           </Button>

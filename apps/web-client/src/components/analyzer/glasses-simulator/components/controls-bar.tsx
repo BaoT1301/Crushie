@@ -39,6 +39,9 @@ export function ControlsBar({
   confidencePct,
 }: ControlsBarProps) {
   return (
+    /* The three icon-only controls grow to 44px on a coarse pointer: they
+       sit outside the lens, so unlike the HUD they are ordinary UI and need a
+       real touch target. */
     <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-center gap-2 px-4">
       {/* Frame picker */}
       {(Object.keys(glassesConfigs) as GlassesFrameType[]).map((type) => {
@@ -52,7 +55,7 @@ export function ControlsBar({
             variant={active ? "default" : "outline"}
             className={
               active
-                ? "bg-rose-500 text-white hover:bg-rose-600"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "border-rose-300/40 bg-black/30 text-rose-300 hover:bg-rose-500/10"
             }
             onClick={() => onFrameChange(type)}
@@ -71,7 +74,7 @@ export function ControlsBar({
         type="button"
         size="icon"
         variant="ghost"
-        className={`h-8 w-8 hover:bg-rose-500/15 ${
+        className={`h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 hover:bg-rose-500/15 ${
           nightVision ? "text-green-400" : "text-rose-300 hover:text-rose-200"
         }`}
         onClick={onToggleNightVision}
@@ -91,7 +94,7 @@ export function ControlsBar({
         type="button"
         size="icon"
         variant="ghost"
-        className="h-8 w-8 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
+        className="h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
         onClick={onScreenshot}
         aria-label="Capture screenshot"
       >
@@ -103,7 +106,7 @@ export function ControlsBar({
         type="button"
         size="icon"
         variant="ghost"
-        className="h-8 w-8 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
+        className="h-8 w-8 pointer-coarse:h-11 pointer-coarse:w-11 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
         onClick={onToggleMute}
         aria-label={isMuted ? "Unmute" : "Mute"}
       >

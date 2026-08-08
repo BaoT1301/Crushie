@@ -37,7 +37,7 @@ export function ConversationOpenersCard({
         )}
       >
         <MessageSquare
-          className={cn("text-chart-2", compact ? "w-4 h-4" : "w-5 h-5")}
+          className={cn("text-primary", compact ? "w-4 h-4" : "w-5 h-5")}
         />
         <h3
           className={cn(

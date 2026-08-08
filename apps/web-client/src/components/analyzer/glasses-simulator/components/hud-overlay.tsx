@@ -109,13 +109,21 @@ export function HudOverlay({
         />
       </div>
 
-      {/* ── LEFT-CENTER: Context Panel ── */}
-      <div className="absolute left-[8%] top-[24%]">
+      {/* ── LEFT-CENTER: Context Panel ──
+          The width cap lives here, not on the panel itself. These wrappers are
+          absolutely positioned against the lens, so a percentage resolves
+          against the lens width. On the panel it resolved against this wrapper,
+          which is shrink-to-fit and therefore already collapsed — the panels
+          were rendering ~60-80px wide at every viewport, one word per line. */}
+      <div className="absolute left-[8%] top-[24%] w-[min(36%,220px)]">
         <ContextPanel entries={contextEntries} theme={theme} />
       </div>
 
-      {/* ── TOP-RIGHT: Crushie Suggestion Box ── */}
-      <div className="absolute right-[8%] top-[10%]">
+      {/* ── TOP-RIGHT: Crushie Suggestion Box ──
+          36% + 46% + the two 8% insets comes to 98%, so these two never collide
+          however tall the suggestion grows. The px caps take over above roughly
+          a 600px lens, where the percentages would leave a dead middle. */}
+      <div className="absolute right-[8%] top-[10%] w-[min(46%,280px)]">
         <CrushieDisplay
           suggestion={suggestion}
           visualCue={visualCue}
@@ -172,24 +180,28 @@ export function HudOverlay({
         )}
       </div>
 
-      {/* ── BOTTOM-RIGHT: Diagnostic Log + Vibe Badge ── */}
-      <div className="absolute bottom-[10%] right-[8%] flex flex-col items-end gap-1">
+      {/* ── BOTTOM-RIGHT: Diagnostic Log + Vibe Badge ──
+          max-w keeps this column inside its own half of the lens. Unbounded, a
+          28-character vibe name plus "Synchronized" grew the badge wider than
+          the whole lens at phone widths and sat straight on top of the
+          bottom-left intake readout. */}
+      <div className="absolute bottom-[10%] right-[8%] flex max-w-[52%] flex-col items-end gap-1">
         <DiagnosticLog
           entries={diagLog}
           textClass={theme.text}
           dimClass={theme.textDim}
         />
         <div
-          className={`rounded-full ${theme.border} border ${theme.panelBg} px-2 py-0.5 backdrop-blur-sm`}
+          className={`max-w-full rounded-full ${theme.border} border ${theme.panelBg} px-2 py-0.5 backdrop-blur-sm`}
         >
           <span
-            className={`font-mono text-[7px] uppercase tracking-widest ${theme.accent}`}
+            className={`block truncate font-mono text-[7px] uppercase tracking-widest ${theme.accent}`}
             style={{ textShadow: `0 0 6px ${theme.glow}` }}
           >
-            {targetVibe.length > 28
-              ? targetVibe.slice(0, 28) + "…"
-              : targetVibe}{" "}
-            Synchronized
+            {/* The old 28-character JS slice appended its own "…" on top of
+                the CSS ellipsis, so a long vibe read "…MINIM… …". Let truncate
+                own it: full text on a wide lens, one ellipsis on a narrow one. */}
+            {targetVibe} Synchronized
           </span>
         </div>
       </div>

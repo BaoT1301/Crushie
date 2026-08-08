@@ -76,7 +76,7 @@ export function MissionMap({ missions, userLocation }: MissionMapProps) {
       <Card className="backdrop-blur-xl shadow-lg overflow-hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
-            <Map className="w-5 h-5 text-chart-2" />
+            <Map className="w-5 h-5 text-primary" />
             <span>Mission Map</span>
           </CardTitle>
         </CardHeader>
@@ -107,8 +107,8 @@ export function MissionMap({ missions, userLocation }: MissionMapProps) {
                 transition={{ delay: 0.6 }}
                 className="flex items-center gap-2 text-sm text-muted-foreground"
               >
-                <Navigation className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-500 font-medium">★</span>
+                <Navigation className="w-3.5 h-3.5 text-primary" />
+                <span className="text-primary font-medium">★</span>
                 <span>You are here</span>
               </motion.div>
             )}

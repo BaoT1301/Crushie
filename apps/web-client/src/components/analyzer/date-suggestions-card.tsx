@@ -26,7 +26,7 @@ export function DateSuggestionsCard({
       <Card className="backdrop-blur-xl shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
-            <MapPin className="w-5 h-5 text-chart-3" />
+            <MapPin className="w-5 h-5 text-primary" />
             <span>Date Missions</span>
             <span className="text-sm font-normal text-muted-foreground">
               ({suggestions.length} ideas)
@@ -64,7 +64,7 @@ export function DateSuggestionsCard({
 
                 {/* Venue info */}
                 {date.placeName && (
-                  <div className="flex items-center gap-1.5 text-sm text-chart-3 mb-2">
+                  <div className="flex items-center gap-1.5 text-sm text-primary mb-2">
                     <Navigation className="w-3.5 h-3.5" />
                     <span className="font-medium">{date.placeName}</span>
                     {date.whyThisSpot && (

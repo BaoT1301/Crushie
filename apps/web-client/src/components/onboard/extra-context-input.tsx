@@ -43,7 +43,9 @@ export function ExtraContextInput({
         disabled={disabled}
         rows={3}
         className={cn(
-          "w-full rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground",
+          // text-base below md, matching ui/input.tsx: anything under 16px
+          // makes iOS Safari zoom the page in on focus.
+          "w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground md:text-sm",
           "placeholder:text-muted-foreground",
           "focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
           "resize-none transition-all",

@@ -74,7 +74,7 @@ export function LocationButton({
               exit={{ opacity: 0, scale: 0.9 }}
               className="flex items-center gap-2"
             >
-              <div className="flex items-center gap-1.5 rounded-full bg-chart-3/10 border border-chart-3/30 px-3 py-1.5 text-sm text-chart-3">
+              <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/30 px-3 py-1.5 text-sm text-primary">
                 <MapPin className="w-3.5 h-3.5" />
                 <span>Location shared</span>
               </div>
@@ -82,6 +82,7 @@ export function LocationButton({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
+                aria-label="Clear shared location"
                 onClick={handleClear}
                 disabled={disabled}
               >

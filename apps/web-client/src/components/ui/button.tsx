@@ -23,7 +23,12 @@ const buttonVariants = cva(
         default: "h-9 px-4 py-2",
         sm: "h-8 rounded-md px-3 text-xs",
         lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        // Icon buttons carry no label to widen the hit area, so 36px was the
+        // smallest target in the app and the one users actually miss (the
+        // hamburger, chat send, HUD controls). Keyed on pointer type rather
+        // than width: a 768px iPad is still a finger, and a narrow desktop
+        // window is still a cursor.
+        icon: "h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11",
       },
     },
     defaultVariants: {

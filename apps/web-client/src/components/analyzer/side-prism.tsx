@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { GlassCard, GradientMask } from "@/components/ui/glass-card";
+import { GlassCard } from "@/components/ui/glass-card";
 import { StyleBadge } from "./style-badge";
 import { ConversationOpenersCard } from "./conversation-openers-card";
 import { ContextBar } from "./context-bar";
@@ -171,7 +171,7 @@ function CompactDateSuggestions({
                     </p>
 
                     {date.placeName && (
-                      <p className="text-[10px] text-chart-3 font-medium">
+                      <p className="text-[10px] text-primary font-medium">
                         📍 {date.placeName}
                       </p>
                     )}
@@ -227,7 +227,7 @@ export function SidePrism({ result, sessionId, className }: SidePrismProps) {
       {/* Main prism card */}
       <GlassCard variant="strong" glowColor="rose" className="overflow-hidden">
         {/* Top gradient accent */}
-        <div className="h-1 bg-linear-to-r from-primary/50 via-chart-3/50 to-gold/50" />
+        <div className="h-1 bg-linear-to-r from-primary/50 to-primary/20" />
 
         <div className="p-4 md:p-5 space-y-5">
           {/* Style badge — compact */}
@@ -269,7 +269,7 @@ export function SidePrism({ result, sessionId, className }: SidePrismProps) {
               <div className="h-px bg-border/50" />
               <Link href={`/analyze-profile/${sessionId}/simulator`}>
                 <Button
-                  className="w-full bg-linear-to-r from-gold/80 to-gold hover:from-gold hover:to-gold-light text-black font-semibold gap-2 animate-pulse hover:animate-none"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-2"
                   size="sm"
                 >
                   <Sparkles className="w-4 h-4" />

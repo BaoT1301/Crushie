@@ -49,7 +49,7 @@ export function ContextBar({ weather, city, className }: ContextBarProps) {
             <>
               <span className="text-border">|</span>
               <span className="flex items-center gap-1.5">
-                <Thermometer className="w-3 h-3 text-chart-3" />
+                <Thermometer className="w-3 h-3 text-primary" />
                 <span>{Math.round(weather.temp)}°C</span>
               </span>
 

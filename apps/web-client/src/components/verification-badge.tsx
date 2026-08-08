@@ -20,7 +20,7 @@ export function VerificationBadge({
     <span
       title="Pinky Promise Verified"
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-rose-600",
+        "inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary",
         size === "sm" ? "text-xs" : "text-sm",
         className,
       )}

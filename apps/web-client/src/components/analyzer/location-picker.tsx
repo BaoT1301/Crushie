@@ -158,7 +158,7 @@ export function LocationPicker({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-1.5">
-        <MapPin className="w-4 h-4 text-chart-3" />
+        <MapPin className="w-4 h-4 text-primary" />
         <span>Location</span>
         <span className="text-muted-foreground font-normal">(optional)</span>
       </div>
@@ -173,7 +173,7 @@ export function LocationPicker({
             exit={{ opacity: 0, scale: 0.9 }}
             className="flex items-center gap-2"
           >
-            <div className="flex items-center gap-1.5 rounded-full bg-chart-3/10 border border-chart-3/30 px-3 py-1.5 text-sm text-chart-3">
+            <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/30 px-3 py-1.5 text-sm text-primary">
               <MapPin className="w-3.5 h-3.5" />
               <span>{displayLabel}</span>
             </div>

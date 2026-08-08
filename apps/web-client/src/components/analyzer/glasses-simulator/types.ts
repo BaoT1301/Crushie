@@ -21,14 +21,38 @@ export interface GlassesConfig {
   theme: GlassesTheme;
 }
 
+/**
+ * The instruction sent as `language` to `realtime.getLiveSuggestion`.
+ *
+ * The server validates this as a length-bounded string, not an enum, so the
+ * union below is a client-side allowlist rather than a mirror of a server
+ * contract — it exists to stop a typo in the picker from silently changing what
+ * the model is told. Adding a language means adding it here and in
+ * `theme.ts`; no server change is required.
+ */
+export type LanguagePromptHint =
+  | "Respond in English."
+  | "Respond in Spanish."
+  | "Respond in French."
+  | "Respond in German."
+  | "Respond in Portuguese."
+  | "Respond in Italian."
+  | "Respond in Japanese."
+  | "Respond in Korean."
+  | "Respond in Vietnamese."
+  | "Respond in Mandarin Chinese."
+  | "Respond in Thai."
+  | "Respond in Hindi."
+  | "Respond in Arabic.";
+
 export interface LanguageOption {
   code: string;
   /** BCP-47 tag for SpeechRecognition.lang */
   speechCode: string;
   label: string;
   flag: string;
-  /** Instruction snippet injected into Gemini prompt */
-  promptHint: string;
+  /** Instruction snippet injected into the coach prompt */
+  promptHint: LanguagePromptHint;
 }
 
 export type SpeechRecognitionLike = {

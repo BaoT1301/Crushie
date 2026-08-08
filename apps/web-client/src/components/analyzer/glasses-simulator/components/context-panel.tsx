@@ -38,9 +38,10 @@ export function ContextPanel({
 
   return (
     <div
-      className={`flex flex-col gap-0.5 rounded-md ${theme.border} border ${theme.panelBg} px-2 py-1.5 backdrop-blur-md`}
+      className={`flex w-full flex-col gap-0.5 rounded-md ${theme.border} border ${theme.panelBg} px-2 py-1.5 backdrop-blur-md`}
       style={{
-        maxWidth: "min(44%, 220px)",
+        // Width is set by the positioning wrapper in hud-overlay.tsx; see the
+        // note there. A percentage here collapsed the panel to ~64px.
         willChange: "transform",
         transform: "translateZ(0)",
         filter: `drop-shadow(0 0 6px ${theme.glow})`,

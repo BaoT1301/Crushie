@@ -40,9 +40,9 @@ export function WeatherBanner({ weather, city }: WeatherBannerProps) {
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex items-center gap-3 rounded-lg bg-chart-2/10 border border-chart-2/20 px-4 py-3"
+      className="flex items-center gap-3 rounded-lg bg-primary/10 border border-primary/20 px-4 py-3"
     >
-      <WeatherIcon className="w-8 h-8 text-chart-2" />
+      <WeatherIcon className="w-8 h-8 text-primary" />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">

@@ -55,11 +55,11 @@ export function AnalyzerUploadZone({
       >
         {/* Decorative gradient overlay for empty state */}
         {!hasImages && (
-          <div className="absolute inset-0 bg-linear-to-br from-primary/[0.03] via-transparent to-chart-3/[0.03] pointer-events-none" />
+          <div className="absolute inset-0 bg-linear-to-br from-primary/[0.03] via-transparent to-primary/[0.03] pointer-events-none" />
         )}
 
         <div
-          className={`p-5 md:p-8 ${!hasImages ? "min-h-[40vh] md:min-h-[50vh] flex flex-col items-center justify-center" : ""}`}
+          className={`p-5 md:p-8 ${!hasImages ? "min-h-[40dvh] md:min-h-[50dvh] flex flex-col items-center justify-center" : ""}`}
         >
           {/* Empty state hero */}
           {!hasImages && (

@@ -68,6 +68,18 @@ export function MetaGlassesSimulator({
     trpc.realtime.getLiveSuggestion.mutationOptions(),
   );
 
+  /* The mutation object is a new identity on every state transition (pending →
+     success → …). Depending on it directly made `pollSuggestion` — and the
+     polling effect below — rebuild after every request, so the effect's cleanup
+     ran mid-cycle: POLL_MS was never waited out and stopAudio() cut the TTS off
+     mid-sentence. Read it through a ref so both stay stable. */
+  const liveSuggestionMutationRef = useRef(liveSuggestionMutation);
+  liveSuggestionMutationRef.current = liveSuggestionMutation;
+
+  /* Same reason: `speech` is a fresh object each render. */
+  const currentTopicRef = useRef(speech.currentTopic);
+  currentTopicRef.current = speech.currentTopic;
+
   /* ── Stop TTS immediately when muting ── */
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -142,10 +154,10 @@ export function MetaGlassesSimulator({
     );
     pushContext("environment", "Frame scan", "Analysing visual feed...");
     try {
-      const res = await liveSuggestionMutation.mutateAsync({
+      const res = await liveSuggestionMutationRef.current.mutateAsync({
         frame: base64,
         targetVibe,
-        currentTopic: voiceInputRef.current || speech.currentTopic,
+        currentTopic: voiceInputRef.current || currentTopicRef.current,
         language: languageRef.current.promptHint,
       });
       const next = res.suggestion.trim();
@@ -187,14 +199,7 @@ export function MetaGlassesSimulator({
     } finally {
       inFlightRef.current = false;
     }
-  }, [
-    liveSuggestionMutation,
-    playTts,
-    pushDiag,
-    pushContext,
-    targetVibe,
-    matchName,
-  ]);
+  }, [playTts, pushDiag, pushContext, targetVibe]);
 
   useEffect(() => {
     let cancelled = false;

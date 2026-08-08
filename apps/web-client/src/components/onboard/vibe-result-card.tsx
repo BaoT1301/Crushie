@@ -38,7 +38,7 @@ function useConfetti() {
       decay: 0.94,
       startVelocity: 20,
       shapes: [heart],
-      colors: ["#e63972", "#f472b6", "#D4AF37", "#fce4ec", "#ec4899"],
+      colors: ["#e63972", "#f472b6", "#fce4ec"],
       scalar: 2,
     };
 
@@ -155,16 +155,16 @@ export function VibeResultCard({
           transition={{ delay: 0.6 }}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground mb-3"
         >
-          <Sparkles className="w-4 h-4 text-gold" />
+          <Sparkles className="w-4 h-4 text-primary" />
           <span>Your Vibe Has Been Revealed</span>
-          <Sparkles className="w-4 h-4 text-gold" />
+          <Sparkles className="w-4 h-4 text-primary" />
         </motion.div>
 
         <motion.h2
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.7, type: "spring", stiffness: 150 }}
-          className="text-4xl md:text-5xl font-bold bg-linear-to-r from-primary via-chart-3 to-gold bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(230,57,114,0.15)] animate-shimmer bg-size-[200%_auto]"
+          className="font-display text-4xl md:text-5xl font-semibold tracking-tight text-foreground"
         >
           {profile.vibeName}
         </motion.h2>
@@ -178,11 +178,11 @@ export function VibeResultCard({
       >
         <GlassCard
           variant="strong"
-          glowColor="gold"
-          className="overflow-hidden border-gold/20"
+          glowColor="rose"
+          className="overflow-hidden border-primary/20"
         >
           {/* Gold shimmer top border */}
-          <div className="h-1 bg-linear-to-r from-transparent via-gold/50 to-transparent" />
+          <div className="h-1 bg-linear-to-r from-transparent via-primary/50 to-transparent" />
 
           <div className="p-6 md:p-8 space-y-6">
             {/* Summary */}
@@ -302,7 +302,7 @@ export function VibeResultCard({
                 <Button
                   onClick={onContinue}
                   size="lg"
-                  className="flex-1 py-5 text-base group bg-linear-to-r from-primary to-chart-3 hover:from-primary/90 hover:to-chart-3/90"
+                  className="flex-1 py-5 text-base group bg-linear-to-r bg-primary hover:bg-primary/90"
                 >
                   Continue to Dashboard
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useId, useRef } from "react";
 import { Upload, X, ImagePlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,7 @@ export function MultiImageUploader({
   disabled = false,
 }: MultiImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
 
   const addFiles = useCallback(
     (files: FileList | File[]) => {
@@ -96,7 +97,10 @@ export function MultiImageUploader({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-foreground">
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-medium text-foreground"
+        >
           Upload Profile Screenshots
         </label>
         <span className="text-xs text-muted-foreground">
@@ -109,13 +113,17 @@ export function MultiImageUploader({
         </span>
       </div>
 
+      {/* `sr-only`, not `hidden`: display:none removes the input from the tab
+          order entirely, so a keyboard user had no way into the file picker.
+          sr-only keeps it focusable and label-addressable while invisible. */}
       <input
+        id={inputId}
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp,image/heic"
         multiple
         onChange={handleFileInput}
-        className="hidden"
+        className="sr-only"
         disabled={!canAddMore}
       />
 
@@ -172,33 +180,43 @@ export function MultiImageUploader({
 
       {/* Empty state drop zone */}
       {images.length === 0 && (
-        <div
+        <button
+          type="button"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={() => canAddMore && inputRef.current?.click()}
+          disabled={!canAddMore}
+          aria-controls={inputId}
           className={cn(
             "relative flex flex-col items-center justify-center w-full h-56",
             "border-2 border-dashed rounded-2xl cursor-pointer",
             "transition-all duration-300 group",
             "border-border hover:border-primary/50 bg-muted/20 hover:bg-muted/40",
+            "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-primary/50",
             disabled && "opacity-50 cursor-not-allowed",
           )}
         >
-          <motion.div
+          {/* Spans, not divs/paragraphs: <button> only accepts phrasing
+              content, and the drop zone has to stay a real button so the
+              keyboard and voice control reach it. */}
+          <motion.span
+            className="block"
             animate={{ y: [0, -8, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           >
             <Upload className="w-12 h-12 text-muted-foreground group-hover:text-foreground transition-colors mx-auto mb-3" />
-          </motion.div>
-          <p className="text-foreground font-medium mb-1">
+          </motion.span>
+          <span className="block text-foreground font-medium mb-1">
             Drop screenshots here
-          </p>
-          <p className="text-muted-foreground text-sm">or click to browse</p>
-          <p className="text-muted-foreground/60 text-xs mt-3">
+          </span>
+          <span className="block text-muted-foreground text-sm">
+            or click to browse
+          </span>
+          <span className="block text-muted-foreground text-xs mt-3">
             PNG, JPG, WebP, HEIC — up to 10MB each — {minImages}-{maxImages}{" "}
             images
-          </p>
-        </div>
+          </span>
+        </button>
       )}
     </div>
   );

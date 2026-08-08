@@ -90,7 +90,7 @@ export function VibeAnalysisCard({
                   transition={{ delay: 0.4 + i * 0.1 }}
                   className="flex items-start gap-3 text-foreground/80"
                 >
-                  <Zap className="w-4 h-4 text-chart-1 mt-1 shrink-0" />
+                  <Zap className="w-4 h-4 text-primary mt-1 shrink-0" />
                   <span>{tip}</span>
                 </motion.div>
               ))}
