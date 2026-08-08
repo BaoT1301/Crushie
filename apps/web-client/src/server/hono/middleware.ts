@@ -8,12 +8,29 @@
 import { createMiddleware } from "hono/factory";
 import { verifyToken } from "@clerk/backend";
 import { HTTPException } from "hono/http-exception";
+import { logger } from "@/lib/logger";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
 export type AuthEnv = {
   Variables: {
     userId: string;
+    /**
+     * The verified Clerk session JWT, kept so route handlers can open an
+     * RLS-scoped database connection.
+     *
+     * DATABASE_URL now connects as `crushie_app`, which is NOBYPASSRLS, so every
+     * policy evaluates. Policies identify the caller through
+     * `public.user_id()`, which reads `request.jwt.claims`. Something has to set
+     * that per transaction, and getSecureDb() needs a token to do it.
+     *
+     * It cannot fall back to Clerk's cookie-session default here: mobile clients
+     * authenticate with a Bearer token and send no cookie, so the default lookup
+     * finds nothing. The token verified above is the right one to pass — the
+     * `sub` claim that public.user_id() reads is the same value we set as
+     * userId.
+     */
+    clerkToken: string;
   };
 };
 
@@ -51,23 +68,21 @@ export const clerk = createMiddleware<AuthEnv>(async (c, next) => {
     const payload = await verifyToken(token, { secretKey });
 
     if (!payload.sub) {
-      console.error("[auth] Token verified but no sub claim");
+      logger.error("[auth] Token verified but no sub claim");
       throw new HTTPException(401, {
         message: "Unauthorized: token missing user identity",
       });
     }
 
     c.set("userId", payload.sub);
+    c.set("clerkToken", token);
     await next();
   } catch (err: unknown) {
     // If it's already an HTTPException, re-throw
     if (err instanceof HTTPException) throw err;
 
     // Log the actual verification error for debugging
-    console.error(
-      "[auth] Token verification failed:",
-      err instanceof Error ? err.message : err,
-    );
+    logger.error("[auth] Token verification failed", err);
     throw new HTTPException(401, {
       message: "Unauthorized: invalid or expired token",
     });

@@ -13,6 +13,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { AuthEnv } from "../middleware";
+import { logger } from "@/lib/logger";
 import {
   uploadOnboardImage,
   getOnboardImageUrls,
@@ -43,7 +44,7 @@ app.post("/onboard-image", async (c) => {
     if (!raw) {
       const keys: string[] = [];
       formData.forEach((_, k) => keys.push(k));
-      console.error("[uploads] 'image' not found. Available keys:", keys);
+      logger.error("[uploads] 'image' not found. Available keys", keys);
       throw new HTTPException(400, {
         message: "Missing 'image' field in form data",
       });
@@ -54,10 +55,10 @@ app.post("/onboard-image", async (c) => {
       // so the FormData parser treated the binary payload as a text
       // string. This usually means the client didn't send the
       // filename — see mobile `useUploadOnboardImage` for the fix.
-      console.error(
-        "[uploads] 'image' was parsed as text, not a File.",
-        "Ensure the client sends FormData with a filename.",
-        `Value length: ${raw.length}`,
+      logger.error(
+        "[uploads] 'image' was parsed as text, not a File — the client must send FormData with a filename",
+        undefined,
+        { valueLength: raw.length },
       );
       throw new HTTPException(400, {
         message:

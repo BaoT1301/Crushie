@@ -9,9 +9,9 @@
 
 import { Hono } from "hono";
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "@/db";
 import { users } from "@/services/users/schema";
 import { vibeProfiles } from "@/services/vibe-profiles/schema";
+import { embedAndStoreProfile } from "@/services/vibe-profiles/embedding";
 import { vibeMatches } from "@/services/social/schema";
 import { analyzerSessions } from "@/services/verification/schema";
 import {
@@ -21,11 +21,24 @@ import {
   type ProfileSummary,
 } from "@/services/llm/client";
 import type { AuthEnv } from "../middleware";
+import { withRls } from "../secure-db";
 import { clerkClient } from "@clerk/nextjs/server";
 
 const app = new Hono<AuthEnv>();
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * The RLS-scoped transaction handed to a withRls callback. Named here so
+ * helpers can take one and run inside a caller's transaction rather than
+ * opening a second one of their own.
+ */
+type RlsTx = typeof withRls extends (
+  c: never,
+  query: (tx: infer Tx) => Promise<unknown>,
+) => unknown
+  ? Tx
+  : never;
 
 function toProfileSummary(profile: {
   userId: string;
@@ -47,8 +60,14 @@ function toProfileSummary(profile: {
   };
 }
 
-async function ensureUserExists(userId: string) {
-  const [existing] = await db
+/**
+ * Takes the caller's transaction rather than opening its own: the row it
+ * guarantees only has to exist for the insert that follows it, and the two
+ * belong in the same transaction so a failed profile write does not leave a
+ * placeholder user behind.
+ */
+async function ensureUserExists(tx: RlsTx, userId: string) {
+  const [existing] = await tx
     .select({ id: users.id })
     .from(users)
     .where(eq(users.id, userId))
@@ -77,7 +96,7 @@ async function ensureUserExists(userId: string) {
     // ignore
   }
 
-  await db
+  await tx
     .insert(users)
     .values({
       id: userId,
@@ -120,25 +139,17 @@ app.post("/generate-vibe", async (c) => {
     useMock: body.useMock,
   });
 
-  // Ensure FK to users table exists before inserting vibe profile
-  await ensureUserExists(userId);
+  // The FK row and the profile it exists for are written in one transaction.
+  // The LLM call above is deliberately outside it — nothing should hold a
+  // transaction open across a model round trip.
+  const [saved] = await withRls(c, async (tx) => {
+    // Ensure FK to users table exists before inserting vibe profile
+    await ensureUserExists(tx, userId);
 
-  const [saved] = await db
-    .insert(vibeProfiles)
-    .values({
-      userId,
-      vibeName: data.vibeName,
-      vibeSummary: data.vibeSummary,
-      energy: data.energy,
-      moodTags: data.moodTags,
-      styleTags: data.styleTags,
-      interestTags: data.interestTags,
-      quizAnswers: body.quizAnswers,
-      photoUrls: data.photoUrls,
-    })
-    .onConflictDoUpdate({
-      target: vibeProfiles.userId,
-      set: {
+    const rows = await tx
+      .insert(vibeProfiles)
+      .values({
+        userId,
         vibeName: data.vibeName,
         vibeSummary: data.vibeSummary,
         energy: data.energy,
@@ -147,11 +158,37 @@ app.post("/generate-vibe", async (c) => {
         interestTags: data.interestTags,
         quizAnswers: body.quizAnswers,
         photoUrls: data.photoUrls,
-        isActive: true,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
+      })
+      .onConflictDoUpdate({
+        target: vibeProfiles.userId,
+        set: {
+          vibeName: data.vibeName,
+          vibeSummary: data.vibeSummary,
+          energy: data.energy,
+          moodTags: data.moodTags,
+          styleTags: data.styleTags,
+          interestTags: data.interestTags,
+          quizAnswers: body.quizAnswers,
+          photoUrls: data.photoUrls,
+          isActive: true,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    // A profile with no vector never appears in matching, so it is written in
+    // the same transaction as the profile itself.
+    await embedAndStoreProfile(tx, userId, {
+      vibeName: data.vibeName,
+      vibeSummary: data.vibeSummary,
+      energy: data.energy,
+      moodTags: data.moodTags,
+      styleTags: data.styleTags,
+      interestTags: data.interestTags,
+    });
+
+    return rows;
+  });
 
   return c.json({ data: { profile: saved, meta } }, 201);
 });
@@ -190,20 +227,22 @@ app.post("/analyze-profile", async (c) => {
     useMock: body.useMock,
   });
 
-  const [session] = await db
-    .insert(analyzerSessions)
-    .values({
-      userId,
-      imageHash: data.imageHash,
-      hintTags: data.hintTags,
-      predictedStyle: data.predictedStyle,
-      vibePrediction: data.vibePrediction,
-      conversationOpeners: data.conversationOpeners,
-      dateSuggestions: data.dateSuggestions,
-      modelVersion: data.modelVersion,
-      latencyMs: data.latencyMs,
-    })
-    .returning();
+  const [session] = await withRls(c, (tx) =>
+    tx
+      .insert(analyzerSessions)
+      .values({
+        userId,
+        imageHash: data.imageHash,
+        hintTags: data.hintTags,
+        predictedStyle: data.predictedStyle,
+        vibePrediction: data.vibePrediction,
+        conversationOpeners: data.conversationOpeners,
+        dateSuggestions: data.dateSuggestions,
+        modelVersion: data.modelVersion,
+        latencyMs: data.latencyMs,
+      })
+      .returning(),
+  );
 
   return c.json({ data: { session, meta } }, 201);
 });
@@ -221,13 +260,15 @@ app.post("/evaluate-match", async (c) => {
   }>();
 
   // 1. Fetch both profiles
-  const [myProfile] = await db
-    .select()
-    .from(vibeProfiles)
-    .where(
-      and(eq(vibeProfiles.userId, userId), eq(vibeProfiles.isActive, true)),
-    )
-    .limit(1);
+  const [myProfile] = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(vibeProfiles)
+      .where(
+        and(eq(vibeProfiles.userId, userId), eq(vibeProfiles.isActive, true)),
+      )
+      .limit(1),
+  );
 
   if (!myProfile) {
     return c.json(
@@ -236,16 +277,18 @@ app.post("/evaluate-match", async (c) => {
     );
   }
 
-  const [targetProfile] = await db
-    .select()
-    .from(vibeProfiles)
-    .where(
-      and(
-        eq(vibeProfiles.userId, body.targetUserId),
-        eq(vibeProfiles.isActive, true),
-      ),
-    )
-    .limit(1);
+  const [targetProfile] = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(vibeProfiles)
+      .where(
+        and(
+          eq(vibeProfiles.userId, body.targetUserId),
+          eq(vibeProfiles.isActive, true),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!targetProfile) {
     return c.json(
@@ -257,14 +300,16 @@ app.post("/evaluate-match", async (c) => {
   // 2. Compute vector similarity
   let vectorSimilarity: number | undefined;
   try {
-    const simResult = await db.execute(sql`
+    const simResult = await withRls(c, (tx) =>
+      tx.execute(sql`
       SELECT 1 - (a.embedding <=> b.embedding) AS similarity
       FROM vibe_profiles a, vibe_profiles b
       WHERE a.user_id = ${userId}
         AND b.user_id = ${body.targetUserId}
         AND a.embedding IS NOT NULL
         AND b.embedding IS NOT NULL
-    `);
+    `),
+    );
     if (
       Array.isArray(simResult) &&
       simResult.length > 0 &&
@@ -289,21 +334,23 @@ app.post("/evaluate-match", async (c) => {
 
   // 4. Save match if score > 0.7
   if (compatibility.score > 0.7) {
-    await db
-      .insert(vibeMatches)
-      .values({
-        userAId: userId,
-        userBId: body.targetUserId,
-        similarity: compatibility.score,
-        compatibility: {
-          narrative: compatibility.narrative,
-          commonGround: compatibility.commonGround,
-          energyCompatibility: compatibility.energyCompatibility,
-          interestOverlap: compatibility.interestOverlap,
-          conversationStarter: compatibility.conversationStarter,
-        },
-      })
-      .onConflictDoNothing();
+    await withRls(c, (tx) =>
+      tx
+        .insert(vibeMatches)
+        .values({
+          userAId: userId,
+          userBId: body.targetUserId,
+          similarity: compatibility.score,
+          compatibility: {
+            narrative: compatibility.narrative,
+            commonGround: compatibility.commonGround,
+            energyCompatibility: compatibility.energyCompatibility,
+            interestOverlap: compatibility.interestOverlap,
+            conversationStarter: compatibility.conversationStarter,
+          },
+        })
+        .onConflictDoNothing(),
+    );
   }
 
   return c.json({ data: { compatibility, meta, vectorSimilarity } });
@@ -326,20 +373,23 @@ app.post("/find-and-evaluate-matches", async (c) => {
   const threshold = body.threshold ?? 0.7;
 
   // 1. Fetch my profile
-  const [myProfile] = await db
-    .select()
-    .from(vibeProfiles)
-    .where(
-      and(eq(vibeProfiles.userId, userId), eq(vibeProfiles.isActive, true)),
-    )
-    .limit(1);
+  const [myProfile] = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(vibeProfiles)
+      .where(
+        and(eq(vibeProfiles.userId, userId), eq(vibeProfiles.isActive, true)),
+      )
+      .limit(1),
+  );
 
   if (!myProfile) {
     return c.json({ error: "You must create a Vibe Profile first." }, 412);
   }
 
   // 2. pgvector top N
-  const candidates = (await db.execute(sql`
+  const candidates = (await withRls(c, (tx) =>
+    tx.execute(sql`
     SELECT
       vp.*,
       1 - (vp.embedding <=> (
@@ -363,7 +413,8 @@ app.post("/find-and-evaluate-matches", async (c) => {
       WHERE user_id = ${userId} AND is_active = TRUE
     )
     LIMIT ${limit}
-  `)) as Array<Record<string, unknown>>;
+  `),
+  )) as Array<Record<string, unknown>>;
 
   if (!candidates || candidates.length === 0) {
     return c.json({
@@ -395,22 +446,28 @@ app.post("/find-and-evaluate-matches", async (c) => {
         useMock: body.useMock,
       });
 
+      // One transaction per candidate, opened after that candidate's model call
+      // returns. Collecting the rows and inserting them together would be fewer
+      // transactions but would hold nothing useful — these are independent
+      // upserts with no invariant between them.
       if (compatibility.score > 0.7) {
-        await db
-          .insert(vibeMatches)
-          .values({
-            userAId: userId,
-            userBId: profileB.userId,
-            similarity: compatibility.score,
-            compatibility: {
-              narrative: compatibility.narrative,
-              commonGround: compatibility.commonGround,
-              energyCompatibility: compatibility.energyCompatibility,
-              interestOverlap: compatibility.interestOverlap,
-              conversationStarter: compatibility.conversationStarter,
-            },
-          })
-          .onConflictDoNothing();
+        await withRls(c, (tx) =>
+          tx
+            .insert(vibeMatches)
+            .values({
+              userAId: userId,
+              userBId: profileB.userId,
+              similarity: compatibility.score,
+              compatibility: {
+                narrative: compatibility.narrative,
+                commonGround: compatibility.commonGround,
+                energyCompatibility: compatibility.energyCompatibility,
+                interestOverlap: compatibility.interestOverlap,
+                conversationStarter: compatibility.conversationStarter,
+              },
+            })
+            .onConflictDoNothing(),
+        );
       }
 
       return {

@@ -19,7 +19,9 @@
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+// Aliased: Hono's request-logging middleware and our structured logger are both
+// called `logger`, and both are used in this file.
+import { logger as honoRequestLogger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 
 import { clerk, requireAuth, type AuthEnv } from "./middleware";
@@ -31,6 +33,7 @@ import verificationRoutes from "./routes/verification";
 import llmRoutes from "./routes/llm";
 import examplesRoutes from "./routes/examples";
 import uploadsRoutes from "./routes/uploads";
+import { logger } from "@/lib/logger";
 
 // ── App Factory ─────────────────────────────────────────────────────────
 
@@ -38,7 +41,7 @@ const app = new Hono<AuthEnv>().basePath("/api/mobile");
 
 // ── Global Middleware ───────────────────────────────────────────────────
 
-app.use("*", logger());
+app.use("*", honoRequestLogger());
 
 app.use(
   "*",
@@ -77,14 +80,26 @@ app.route("/examples", examplesRoutes);
 // ── Error Handler ───────────────────────────────────────────────────────
 
 app.onError((err, c) => {
-  console.error("[mobile-api]", err);
+  logger.error("[mobile-api] unhandled error", err, {
+    path: c.req.path,
+    method: c.req.method,
+  });
 
   if (err instanceof HTTPException) {
     return c.json({ error: err.message }, err.status);
   }
 
+  // Internals only in development. This previously returned err.message to
+  // every caller, which surfaces Postgres constraint and table names on any
+  // unhandled DB error. The Express service already gated this the same way.
   return c.json(
-    { error: err instanceof Error ? err.message : "Internal server error" },
+    {
+      error: "Internal server error",
+      message:
+        process.env.NODE_ENV === "development" && err instanceof Error
+          ? err.message
+          : undefined,
+    },
     500,
   );
 });

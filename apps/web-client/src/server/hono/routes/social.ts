@@ -5,7 +5,6 @@
 
 import { Hono } from "hono";
 import { eq, and, or, desc, sql } from "drizzle-orm";
-import { db } from "@/db";
 import {
   connections,
   vibeMatches,
@@ -14,6 +13,7 @@ import {
   vibePointsLedger,
 } from "@/services/social/schema";
 import type { AuthEnv } from "../middleware";
+import { withRls } from "../secure-db";
 
 const app = new Hono<AuthEnv>();
 
@@ -39,11 +39,13 @@ app.get("/connections", async (c) => {
     ? and(baseCondition, eq(connections.status, status))
     : baseCondition;
 
-  const rows = await db
-    .select()
-    .from(connections)
-    .where(whereClause!)
-    .orderBy(desc(connections.createdAt));
+  const rows = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(connections)
+      .where(whereClause!)
+      .orderBy(desc(connections.createdAt)),
+  );
 
   return c.json({ data: rows });
 });
@@ -53,10 +55,12 @@ app.post("/connections", async (c) => {
   const userId = c.var.userId;
   const { targetUserId } = await c.req.json<{ targetUserId: string }>();
 
-  const [created] = await db
-    .insert(connections)
-    .values({ requesterId: userId, addresseeId: targetUserId })
-    .returning();
+  const [created] = await withRls(c, (tx) =>
+    tx
+      .insert(connections)
+      .values({ requesterId: userId, addresseeId: targetUserId })
+      .returning(),
+  );
 
   return c.json({ data: created }, 201);
 });
@@ -69,19 +73,33 @@ app.patch("/connections/:id", async (c) => {
     status: "accepted" | "blocked";
   }>();
 
-  const [updated] = await db
-    .update(connections)
-    .set({ status, updatedAt: new Date() })
-    .where(
-      and(
-        eq(connections.id, connectionId),
-        or(
-          eq(connections.requesterId, userId),
-          eq(connections.addresseeId, userId),
+  const [updated] = await withRls(c, (tx) =>
+    tx
+      .update(connections)
+      .set({ status, updatedAt: new Date() })
+      .where(
+        and(
+          eq(connections.id, connectionId),
+          // Accepting is the addressee's decision alone. Allowing either party
+          // through here let a requester accept their own outgoing request,
+          // which defeats the consent step. Blocking stays available to both.
+          status === "accepted"
+            ? eq(connections.addresseeId, userId)
+            : or(
+                eq(connections.requesterId, userId),
+                eq(connections.addresseeId, userId),
+              ),
         ),
-      ),
-    )
-    .returning();
+      )
+      .returning(),
+  );
+
+  // Report the miss rather than 200-ing on a write that did not land. A caller
+  // who is not the addressee now learns their accept was rejected instead of
+  // getting an empty body that looks like it worked.
+  if (!updated) {
+    return c.json({ error: "Connection not found" }, 404);
+  }
 
   return c.json({ data: updated });
 });
@@ -91,14 +109,24 @@ app.delete("/connections/:id", async (c) => {
   const userId = c.var.userId;
   const connectionId = c.req.param("id");
 
-  await db
-    .delete(connections)
-    .where(
-      and(
-        eq(connections.id, connectionId),
-        eq(connections.requesterId, userId),
-      ),
-    );
+  // .returning() so a no-op delete is detectable. This previously returned
+  // {success: true} unconditionally, which under RLS meant every failed delete
+  // reported success.
+  const deleted = await withRls(c, (tx) =>
+    tx
+      .delete(connections)
+      .where(
+        and(
+          eq(connections.id, connectionId),
+          eq(connections.requesterId, userId),
+        ),
+      )
+      .returning({ id: connections.id }),
+  );
+
+  if (!deleted.length) {
+    return c.json({ error: "Connection not found" }, 404);
+  }
 
   return c.json({ success: true });
 });
@@ -112,12 +140,16 @@ app.get("/matches", async (c) => {
   const userId = c.var.userId;
   const limit = Math.min(Number(c.req.query("limit") ?? 20), 50);
 
-  const rows = await db
-    .select()
-    .from(vibeMatches)
-    .where(or(eq(vibeMatches.userAId, userId), eq(vibeMatches.userBId, userId)))
-    .orderBy(desc(vibeMatches.matchedAt))
-    .limit(limit);
+  const rows = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(vibeMatches)
+      .where(
+        or(eq(vibeMatches.userAId, userId), eq(vibeMatches.userBId, userId)),
+      )
+      .orderBy(desc(vibeMatches.matchedAt))
+      .limit(limit),
+  );
 
   return c.json({ data: rows });
 });
@@ -131,8 +163,10 @@ app.get("/matches/mutuals", async (c) => {
     return c.json({ error: "targetUserId query param required" }, 400);
   }
 
-  const result = await db.execute(
-    sql`SELECT * FROM check_mutual_connections(${userId}, ${targetUserId})`,
+  const result = await withRls(c, (tx) =>
+    tx.execute(
+      sql`SELECT * FROM check_mutual_connections(${userId}, ${targetUserId})`,
+    ),
   );
 
   return c.json({ data: result });
@@ -145,11 +179,13 @@ app.get("/matches/mutuals", async (c) => {
 // GET /social/vouches
 app.get("/vouches", async (c) => {
   const userId = c.var.userId;
-  const rows = await db
-    .select()
-    .from(vibeVouches)
-    .where(eq(vibeVouches.subjectId, userId))
-    .orderBy(desc(vibeVouches.createdAt));
+  const rows = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(vibeVouches)
+      .where(eq(vibeVouches.subjectId, userId))
+      .orderBy(desc(vibeVouches.createdAt)),
+  );
   return c.json({ data: rows });
 });
 
@@ -162,15 +198,17 @@ app.post("/vouches", async (c) => {
     isAnonymous?: boolean;
   }>();
 
-  const [created] = await db
-    .insert(vibeVouches)
-    .values({
-      voucherId: userId,
-      subjectId: body.subjectId,
-      tag: body.tag as any,
-      isAnonymous: body.isAnonymous ?? true,
-    })
-    .returning();
+  const [created] = await withRls(c, (tx) =>
+    tx
+      .insert(vibeVouches)
+      .values({
+        voucherId: userId,
+        subjectId: body.subjectId,
+        tag: body.tag as any,
+        isAnonymous: body.isAnonymous ?? true,
+      })
+      .returning(),
+  );
 
   return c.json({ data: created }, 201);
 });
@@ -180,9 +218,18 @@ app.delete("/vouches/:id", async (c) => {
   const userId = c.var.userId;
   const vouchId = c.req.param("id");
 
-  await db
-    .delete(vibeVouches)
-    .where(and(eq(vibeVouches.id, vouchId), eq(vibeVouches.voucherId, userId)));
+  // .returning() so a no-op delete is detectable — deleting someone else's
+  // vouch, or one that no longer exists, previously reported success.
+  const deleted = await withRls(c, (tx) =>
+    tx
+      .delete(vibeVouches)
+      .where(and(eq(vibeVouches.id, vouchId), eq(vibeVouches.voucherId, userId)))
+      .returning({ id: vibeVouches.id }),
+  );
+
+  if (!deleted.length) {
+    return c.json({ error: "Vouch not found" }, 404);
+  }
 
   return c.json({ success: true });
 });
@@ -194,13 +241,15 @@ app.get("/vouches/summary", async (c) => {
     return c.json({ error: "userId query param required" }, 400);
   }
 
-  const result = await db.execute(sql`
+  const result = await withRls(c, (tx) =>
+    tx.execute(sql`
     SELECT tag, COUNT(*)::int as count
     FROM vibe_vouches
     WHERE subject_id = ${targetUserId}
     GROUP BY tag
     ORDER BY count DESC
-  `);
+  `),
+  );
 
   return c.json({ data: result });
 });
@@ -212,11 +261,13 @@ app.get("/vouches/summary", async (c) => {
 // GET /social/crush-list
 app.get("/crush-list", async (c) => {
   const userId = c.var.userId;
-  const rows = await db
-    .select()
-    .from(crushList)
-    .where(and(eq(crushList.userId, userId), eq(crushList.isActive, true)))
-    .orderBy(desc(crushList.createdAt));
+  const rows = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(crushList)
+      .where(and(eq(crushList.userId, userId), eq(crushList.isActive, true)))
+      .orderBy(desc(crushList.createdAt)),
+  );
   return c.json({ data: rows });
 });
 
@@ -225,14 +276,16 @@ app.post("/crush-list", async (c) => {
   const userId = c.var.userId;
   const { crushUserId } = await c.req.json<{ crushUserId: string }>();
 
-  const [created] = await db
-    .insert(crushList)
-    .values({ userId, crushUserId })
-    .onConflictDoUpdate({
-      target: [crushList.userId, crushList.crushUserId],
-      set: { isActive: true },
-    })
-    .returning();
+  const [created] = await withRls(c, (tx) =>
+    tx
+      .insert(crushList)
+      .values({ userId, crushUserId })
+      .onConflictDoUpdate({
+        target: [crushList.userId, crushList.crushUserId],
+        set: { isActive: true },
+      })
+      .returning(),
+  );
 
   return c.json({ data: created }, 201);
 });
@@ -242,11 +295,19 @@ app.delete("/crush-list/:id", async (c) => {
   const userId = c.var.userId;
   const crushId = c.req.param("id");
 
-  const [updated] = await db
-    .update(crushList)
-    .set({ isActive: false })
-    .where(and(eq(crushList.id, crushId), eq(crushList.userId, userId)))
-    .returning();
+  const [updated] = await withRls(c, (tx) =>
+    tx
+      .update(crushList)
+      .set({ isActive: false })
+      .where(and(eq(crushList.id, crushId), eq(crushList.userId, userId)))
+      .returning(),
+  );
+
+  // Soft delete, so the miss is only visible by checking the returned row —
+  // without this the caller gets a 200 for an entry that was never deactivated.
+  if (!updated) {
+    return c.json({ error: "Crush list entry not found" }, 404);
+  }
 
   return c.json({ data: updated });
 });
@@ -258,11 +319,13 @@ app.delete("/crush-list/:id", async (c) => {
 // GET /social/points
 app.get("/points", async (c) => {
   const userId = c.var.userId;
-  const result = await db.execute(sql`
+  const result = await withRls(c, (tx) =>
+    tx.execute(sql`
     SELECT COALESCE(SUM(delta), 0)::int as total_points
     FROM vibe_points_ledger
     WHERE user_id = ${userId}
-  `);
+  `),
+  );
   return c.json({
     data: { totalPoints: (result as any)?.[0]?.total_points ?? 0 },
   });
@@ -273,12 +336,14 @@ app.get("/points/history", async (c) => {
   const userId = c.var.userId;
   const limit = Math.min(Number(c.req.query("limit") ?? 20), 100);
 
-  const rows = await db
-    .select()
-    .from(vibePointsLedger)
-    .where(eq(vibePointsLedger.userId, userId))
-    .orderBy(desc(vibePointsLedger.createdAt))
-    .limit(limit);
+  const rows = await withRls(c, (tx) =>
+    tx
+      .select()
+      .from(vibePointsLedger)
+      .where(eq(vibePointsLedger.userId, userId))
+      .orderBy(desc(vibePointsLedger.createdAt))
+      .limit(limit),
+  );
 
   return c.json({ data: rows });
 });
