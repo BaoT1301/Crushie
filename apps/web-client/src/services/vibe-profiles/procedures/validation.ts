@@ -87,5 +87,18 @@ export const updateMyProfileInput = z.object({
 
 export const findSimilarInput = z.object({
   limit: z.number().int().min(1).max(50).default(10),
-  threshold: z.number().min(0).max(1).default(0.7),
+  /**
+   * 0.7 was unreachable in practice and returned nothing.
+   *
+   * Measured against real text-embedding-3-small vectors, two distinct people
+   * score roughly 0.55–0.70 — the model puts all short human-descriptive text
+   * in a fairly narrow band, so 0.7 excluded almost every genuine match. The
+   * old default only ever "worked" because the seeded vectors were synthetic
+   * and scored ~0.90 against each other, which was an artefact of how they were
+   * generated rather than a similarity anyone would recognise.
+   *
+   * 0.5 admits plausible matches and still filters noise. Re-measure if the
+   * embedding model changes; the band is model-specific.
+   */
+  threshold: z.number().min(0).max(1).default(0.5),
 });
