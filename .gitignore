@@ -10,11 +10,14 @@ dist/
 build/
 
 # Environment
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+#
+# Deny every .env variant and re-admit the examples, rather than listing
+# variants individually. The previous list covered .env and the four *.local
+# files, which meant a file named .env.production or .env.staging — exactly the
+# ones holding live credentials — would have been committed silently.
+.env*
+!.env.example
+!.env*.example
 
 # Debug
 npm-debug.log*
@@ -54,3 +57,9 @@ supabase/.temp
 # Orchestrator plumbing (per-run worktrees + MCP cache)
 .orchestrator/
 .mcp-cache/
+
+# Playwright output
+test-results/
+playwright-report/
+blob-report/
+.playwright/

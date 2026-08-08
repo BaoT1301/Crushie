@@ -1,4 +1,14 @@
 {
-  "compilerOptions": {},
-  "extends": "expo/tsconfig.base"
+  "//": "Root config for editors and tooling that resolve upward from the repo root. It deliberately compiles nothing: apps/web-client and apps/llm each own a real tsconfig, and this file exists only so a tool that finds it first gets sane defaults instead of an error. It used to extend expo/tsconfig.base, which is not a dependency of this repo (there is no Expo app here), so every tsc invocation that reached it emitted 'Cannot find base config file'.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "files": []
 }
