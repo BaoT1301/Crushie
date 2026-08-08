@@ -5,6 +5,7 @@ import { ThemeEditorState } from "../types";
 import { defaultThemeState } from "../config";
 import { getPresetThemeStyles } from "../presets/helpers";
 import { isDeepEqual } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 const MAX_HISTORY_COUNT = 30;
 const HISTORY_OVERRIDE_THRESHOLD_MS = 500;
@@ -144,7 +145,7 @@ export const useEditorStore = create<EditorStore>()(
             future: [],
           });
         } else {
-          console.warn("No theme checkpoint available to restore to.");
+          logger.warn("No theme checkpoint available to restore to.");
         }
       },
       hasThemeChangedFromCheckpoint: () => {
@@ -249,6 +250,29 @@ export const useEditorStore = create<EditorStore>()(
     }),
     {
       name: "editor-storage",
+      // Persisted state beats the defaults on rehydrate, so any browser that
+      // loaded the app with an older palette keeps it until the version moves.
+      // Bumping here discards saved styles and falls back to the defaults,
+      // preserving only the user's light/dark preference. Bump this again if
+      // the default palette is ever edited.
+      version: 6,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<EditorStore> | undefined;
+
+        if (version >= 6) return state as EditorStore;
+
+        return {
+          ...(state ?? {}),
+          themeState: {
+            ...defaultThemeState,
+            currentMode:
+              state?.themeState?.currentMode ?? defaultThemeState.currentMode,
+          },
+          themeCheckpoint: null,
+          history: [],
+          future: [],
+        } as EditorStore;
+      },
     }
   )
 );
