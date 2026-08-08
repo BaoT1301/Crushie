@@ -3,29 +3,42 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "node test-heal.js",
+    "test": "npm test --workspace=@starter/llm && npm test --workspace=@starter/web",
+    "typecheck": "cd apps/web-client && npx tsc --noEmit",
+    "lint": "npm run lint --workspace=@starter/web",
     "dev:web": "npm run dev --workspace=@starter/web",
     "build:web": "npm run build --workspace=@starter/web",
     "dev:llm": "npm run dev --workspace=@starter/llm",
     "build:llm": "npm run build --workspace=@starter/llm",
     "db:generate": "npm run db:generate --workspace=@starter/web",
     "db:migrate": "npm run db:migrate --workspace=@starter/web",
-    "db:push": "npm run db:push --workspace=@starter/web",
+    "db:push": "supabase db push",
     "db:studio": "npm run db:studio --workspace=@starter/web",
     "supa:start": "supabase start",
     "supa:stop": "supabase stop",
     "supa:status": "supabase status",
     "func:serve": "supabase functions serve",
     "func:deploy": "supabase functions deploy",
-    "dev:mobile": "npm run start --workspace=@starter/mobile",
-    "dev:mobile:ios": "npm run ios --workspace=@starter/mobile",
-    "dev:mobile:android": "npm run android --workspace=@starter/mobile"
+    "db:preflight": "npm run db:preflight --workspace=@starter/web",
+    "test:e2e": "playwright test"
+  },
+  "overrides": {
+    "ws": "^8.21.3",
+    "drizzle-orm": "^0.45.2",
+    "express": {
+      "path-to-regexp": "^0.1.13"
+    }
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.19",
+    "@playwright/test": "^1.62.1",
+    "playwright": "^1.62.1",
     "supabase": "^2.0.0",
     "typescript": "^5.7.0"
   }

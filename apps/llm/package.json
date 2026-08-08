@@ -16,11 +16,12 @@
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.35.0",
-    "@google/generative-ai": "^0.24.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.1",
+    "express": "^4.22.2",
+    "express-async-errors": "^3.1.1",
     "ioredis": "^5.4.1",
+    "openai": "^4.104.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
