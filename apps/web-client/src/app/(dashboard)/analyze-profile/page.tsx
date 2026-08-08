@@ -21,6 +21,7 @@ import type {
   LocationInput,
   AnalyzerSessionSummary,
 } from "@/types/analyzer";
+import { AmbientBackground } from "@/components/ambient-background";
 
 // ============================================================================
 // Page
@@ -138,24 +139,43 @@ export default function AnalyzeProfilePage() {
 
   // ── Load more history ───────────────────────────────────────────────
 
+  // nextCursor is read into a local first so the dependency the React Compiler
+  // infers (`historyQuery.data`) matches the one declared. When they disagree
+  // the compiler cannot prove the manual memo is safe and silently skips
+  // optimizing this entire component — the memo itself was correct, just
+  // narrower than what it could see.
+  const nextHistoryCursor = historyQuery.data?.nextCursor;
+
   const handleLoadMore = useCallback(() => {
-    if (historyQuery.data?.nextCursor) {
-      setHistoryCursor(historyQuery.data.nextCursor);
+    if (nextHistoryCursor) {
+      setHistoryCursor(nextHistoryCursor);
     }
-  }, [historyQuery.data?.nextCursor]);
+  }, [nextHistoryCursor]);
 
   const result = analyzeMutation.data?.session as AnalyzerResult | undefined;
+
+  /**
+   * Whether the main results column has anything of its own to show.
+   *
+   * Weather, nearby places and the mission map all depend on
+   * OPENWEATHER_API_KEY / NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. With none of them
+   * configured the column renders nothing but the reset button while SidePrism
+   * holds the entire analysis, which looks like a broken page rather than a
+   * degraded feature.
+   */
+  const hasEnvContent = Boolean(
+    result &&
+      ((result.weatherContext && result.city) ||
+        (result.nearbyPlaces && result.nearbyPlaces.length > 0) ||
+        (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY &&
+          result.dateSuggestions.length > 0)),
+  );
 
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[100px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-chart-3/5 rounded-full blur-[100px] animate-pulse delay-1000" />
-        <div className="absolute top-1/2 right-1/3 w-72 h-72 bg-gold/3 rounded-full blur-[100px] animate-pulse delay-500" />
-      </div>
+    <div className="min-h-dvh bg-background relative overflow-hidden">
+      <AmbientBackground />
 
       {/* Content */}
       <div className="relative z-10 container max-w-6xl mx-auto px-4 py-6 md:py-10">
@@ -167,13 +187,8 @@ export default function AnalyzeProfilePage() {
           className="text-center mb-8"
         >
           <div className="flex items-center justify-center gap-3 mb-2">
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-            >
-              <Sparkles className="w-7 h-7 text-primary" />
-            </motion.div>
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-linear-to-r from-primary via-chart-3 to-chart-2 bg-clip-text text-transparent">
+                          <Sparkles className="w-7 h-7 text-primary" />
+            <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-foreground">
               Crush Analyzer
             </h1>
           </div>
@@ -226,7 +241,7 @@ export default function AnalyzeProfilePage() {
                       onClick={handleAnalyze}
                       disabled={images.length === 0 || isPending}
                       size="lg"
-                      className="w-full py-6 text-base group bg-linear-to-r from-primary to-chart-3 hover:from-primary/90 hover:to-chart-3/90"
+                      className="w-full py-6 text-base group bg-primary hover:bg-primary/90"
                     >
                       {isPending ? (
                         <>
@@ -274,7 +289,23 @@ export default function AnalyzeProfilePage() {
                   transition={{ duration: 0.5 }}
                 >
                   {/* Desktop: Two-column with sticky Side-Prism */}
-                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
+                  {/* The main column normally carries environment context:
+                      weather, nearby places and the mission map. All three
+                      require GOOGLE_MAPS_API_KEY / OPENWEATHER_API_KEY, so
+                      without those the column collapses to just the reset
+                      button while SidePrism holds every result. That reads as
+                      a broken page.
+
+                      When there is no environment content, the main column
+                      takes the full detail instead and SidePrism is dropped,
+                      so the analysis always has somewhere to live. */}
+                  <div
+                    className={
+                      hasEnvContent
+                        ? "grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6"
+                        : "mx-auto w-full max-w-3xl"
+                    }
+                  >
                     {/* Left column: Environment context + Map */}
                     <div className="space-y-6 min-w-0">
                       {/* Environment context display */}
@@ -309,12 +340,13 @@ export default function AnalyzeProfilePage() {
                         result={result}
                         onReset={handleReset}
                         userLocation={location}
-                        fullDetail={false}
+                        fullDetail={!hasEnvContent}
                       />
                     </div>
 
-                    {/* Right column: Sticky Side-Prism (desktop) */}
-                    <div className="hidden lg:block">
+                    {/* Right column: Sticky Side-Prism (desktop). Hidden when
+                        the main column already shows the full detail. */}
+                    <div className={hasEnvContent ? "hidden lg:block" : "hidden"}>
                       <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-hide gradient-mask-b">
                         <SidePrism result={result} sessionId={result.id} />
                       </div>
@@ -322,7 +354,7 @@ export default function AnalyzeProfilePage() {
                   </div>
 
                   {/* Mobile: Side-Prism rendered inline below */}
-                  <div className="lg:hidden mt-6">
+                  <div className={hasEnvContent ? "lg:hidden mt-6" : "hidden"}>
                     <SidePrism result={result} sessionId={result.id} />
                   </div>
                 </motion.div>

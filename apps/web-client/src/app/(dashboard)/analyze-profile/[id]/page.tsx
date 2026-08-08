@@ -18,6 +18,7 @@ import type {
   WeatherContext,
   NearbyPlace,
 } from "@/types/analyzer";
+import { AmbientBackground } from "@/components/ambient-background";
 
 export default function AnalyzerSessionDetailPage({
   params,
@@ -35,7 +36,7 @@ export default function AnalyzerSessionDetailPage({
 
   if (sessionQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-dvh bg-background flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span>Loading analysis...</span>
@@ -48,7 +49,7 @@ export default function AnalyzerSessionDetailPage({
 
   if (sessionQuery.error || !sessionQuery.data) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-dvh bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">
             {sessionQuery.error?.message ?? "Session not found"}
@@ -88,12 +89,9 @@ export default function AnalyzerSessionDetailPage({
   // ── Render ──────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="min-h-dvh bg-background relative overflow-hidden">
       {/* Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[100px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-chart-3/5 rounded-full blur-[100px] animate-pulse delay-1000" />
-      </div>
+      <AmbientBackground />
 
       <div className="relative z-10 container max-w-5xl mx-auto px-4 py-8 md:py-12">
         {/* Back nav + metadata */}
@@ -129,7 +127,7 @@ export default function AnalyzerSessionDetailPage({
               <Button
                 variant="outline"
                 size="sm"
-                className="border-rose-400/40 text-rose-300 hover:bg-rose-500/10"
+                className="border-primary/40 text-primary hover:bg-primary/10"
               >
                 Launch Simulator Mode
               </Button>

@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardError } from "@/components/error-display";
 import Link from "next/link";
 import {
   Crown,
@@ -83,6 +84,21 @@ export default function DashboardPage() {
     levelQuery.isLoading ||
     historyQuery.isLoading;
 
+  /* Without this, a failed query renders as "0 matches / Unranked" — the stat
+     tiles have no way to say "we don't know" and quietly report zero instead. */
+  const statsError =
+    matchesQuery.isError ||
+    pointsQuery.isError ||
+    levelQuery.isError ||
+    historyQuery.isError;
+
+  const refetchStats = () => {
+    void matchesQuery.refetch();
+    void pointsQuery.refetch();
+    void levelQuery.refetch();
+    void historyQuery.refetch();
+  };
+
   const totalMatches = matches.length;
   const mutualMatches = matches.filter((m: any) => m.isMutual).length;
 
@@ -90,7 +106,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
           Dashboard
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -105,6 +121,18 @@ export default function DashboardPage() {
             <Skeleton key={i} className="h-24 rounded-xl bg-muted" />
           ))}
         </div>
+      ) : statsError ? (
+        <CardError
+          title="Couldn't load your stats"
+          message={
+            matchesQuery.error?.message ??
+            pointsQuery.error?.message ??
+            levelQuery.error?.message ??
+            historyQuery.error?.message ??
+            "Your numbers are safe — we just couldn't fetch them."
+          }
+          onRetry={refetchStats}
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -119,7 +147,7 @@ export default function DashboardPage() {
             label="Academy Points"
             value={totalPoints}
             sub={`${level?.currentLevel?.name ?? "Unranked"} ${level?.currentLevel?.badgeIcon ?? ""}`}
-            accent="bg-amber-500/10 text-amber-600"
+            accent="bg-primary/10 text-primary"
           />
           <StatCard
             icon={<Crown className="h-5 w-5" />}
@@ -130,7 +158,7 @@ export default function DashboardPage() {
                 ? `${level.pointsToNext} pts to ${level.nextLevel.name}`
                 : "Max level"
             }
-            accent="bg-purple-500/10 text-purple-600"
+            accent="bg-primary/10 text-primary"
           />
           <StatCard
             icon={<Zap className="h-5 w-5" />}
@@ -141,7 +169,7 @@ export default function DashboardPage() {
                 .reduce((sum: number, h: any) => sum + h.delta, 0) ?? 0
             }
             sub="from recent activity"
-            accent="bg-green-500/10 text-green-600"
+            accent="bg-primary/10 text-primary"
           />
         </div>
       )}
@@ -161,6 +189,14 @@ export default function DashboardPage() {
           <CardContent className="space-y-4">
             {levelQuery.isLoading ? (
               <Skeleton className="h-20 rounded-lg bg-muted" />
+            ) : levelQuery.isError ? (
+              <CardError
+                title="Couldn't load your level"
+                message={
+                  levelQuery.error?.message ?? "The academy service is down."
+                }
+                onRetry={() => void levelQuery.refetch()}
+              />
             ) : (
               <>
                 <div className="flex items-center gap-4">
@@ -229,6 +265,17 @@ export default function DashboardPage() {
           <CardContent className="space-y-2">
             {historyQuery.isLoading ? (
               <Skeleton className="h-40 rounded-lg bg-muted" />
+            ) : historyQuery.isError ? (
+              /* Distinct from the empty state below: "nothing happened yet" and
+                 "we could not check" are different answers. */
+              <CardError
+                title="Couldn't load recent activity"
+                message={
+                  historyQuery.error?.message ??
+                  "We couldn't reach your activity feed."
+                }
+                onRetry={() => void historyQuery.refetch()}
+              />
             ) : history.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <Trophy className="h-8 w-8 text-muted-foreground/30" />
@@ -247,7 +294,7 @@ export default function DashboardPage() {
                       className={`flex h-8 w-8 items-center justify-center rounded-full ${
                         entry.delta > 0
                           ? "bg-green-500/10 text-green-600"
-                          : "bg-red-500/10 text-red-600"
+                          : "bg-destructive/10 text-destructive"
                       }`}
                     >
                       {entry.delta > 0 ? (
@@ -273,8 +320,8 @@ export default function DashboardPage() {
                     variant="secondary"
                     className={
                       entry.delta > 0
-                        ? "bg-green-500/10 text-green-700"
-                        : "bg-red-500/10 text-red-700"
+                        ? "bg-green-500/10 text-green-600"
+                        : "bg-destructive/10 text-destructive"
                     }
                   >
                     {entry.delta > 0 ? "+" : ""}

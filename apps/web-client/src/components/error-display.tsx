@@ -60,7 +60,7 @@ export function PageError({
   return (
     <div
       className={cn(
-        "flex min-h-[60vh] w-full flex-col items-center justify-center gap-6 px-4",
+        "flex min-h-[60dvh] w-full flex-col items-center justify-center gap-6 px-4",
         className,
       )}
     >

@@ -22,7 +22,7 @@ export default function AnalyzeProfileSimulatorPage({
 
   if (sessionQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-dvh bg-background flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span>Preparing simulator...</span>
@@ -33,7 +33,7 @@ export default function AnalyzeProfileSimulatorPage({
 
   if (sessionQuery.error || !sessionQuery.data) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-dvh bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">
             {sessionQuery.error?.message ?? "Analysis session not found"}
@@ -52,7 +52,7 @@ export default function AnalyzeProfileSimulatorPage({
   const targetVibe = sessionQuery.data.predictedStyle ?? "Aesthetic Minimalist";
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8 md:py-10">
+    <div className="min-h-dvh bg-background px-4 py-8 md:py-10">
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link href={`/analyze-profile/${id}`}>
@@ -61,7 +61,7 @@ export default function AnalyzeProfileSimulatorPage({
               Back to Analysis
             </Button>
           </Link>
-          <h1 className="text-lg font-semibold text-rose-400 [text-shadow:0_0_12px_rgba(251,113,133,0.65)]">
+          <h1 className="text-lg font-semibold text-primary drop-shadow-[0_0_12px_var(--primary)]">
             Live Date Coach Simulator
           </h1>
         </div>

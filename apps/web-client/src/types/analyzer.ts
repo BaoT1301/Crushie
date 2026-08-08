@@ -136,33 +136,33 @@ export interface StyleConfig {
 
 export const STYLE_CONFIG: Record<PredictedStyle, StyleConfig> = {
   direct: {
-    gradient: "from-red-500 to-orange-500",
-    bg: "bg-red-500/10",
-    border: "border-red-500/30",
+    gradient: "from-primary to-rose-500",
+    bg: "bg-primary/10",
+    border: "border-primary/30",
     emoji: "🎯",
   },
   playful: {
-    gradient: "from-pink-500 to-rose-500",
-    bg: "bg-pink-500/10",
-    border: "border-pink-500/30",
+    gradient: "from-primary to-rose-500",
+    bg: "bg-primary/10",
+    border: "border-primary/30",
     emoji: "😄",
   },
   intellectual: {
-    gradient: "from-blue-500 to-cyan-500",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/30",
+    gradient: "from-primary to-rose-500",
+    bg: "bg-primary/10",
+    border: "border-primary/30",
     emoji: "🧠",
   },
   shy: {
-    gradient: "from-purple-500 to-indigo-500",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/30",
+    gradient: "from-primary to-rose-500",
+    bg: "bg-primary/10",
+    border: "border-primary/30",
     emoji: "🌸",
   },
   adventurous: {
-    gradient: "from-orange-500 to-yellow-500",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/30",
+    gradient: "from-primary to-rose-500",
+    bg: "bg-primary/10",
+    border: "border-primary/30",
     emoji: "🏔️",
   },
 };

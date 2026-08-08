@@ -24,6 +24,7 @@ import { InlineError } from "@/components/error-display";
 import { FloatingHearts } from "@/components/love-animations";
 import { VIBE_TAG_CATEGORIES } from "@/types/vibe-onboard";
 import type { VibeProfileResult } from "@/types/vibe-onboard";
+import { AmbientBackground } from "@/components/ambient-background";
 
 // ============================================================================
 // Constants
@@ -87,6 +88,16 @@ export default function OnBoardClient() {
 
   const isPending = isUploading || generateMutation.isPending;
 
+  // Declared here rather than further down with the other derived state:
+  // goToStep reads it, so it has to exist before the dependency array below is
+  // evaluated. It was previously defined ~110 lines later and simply left out
+  // of the deps, which worked only by accident — setStep(2) also changes
+  // `step`, so the callback happened to be recreated anyway. Any later edit
+  // that decoupled those two would have silently broken the step-2 guard.
+  const generatedProfile = generateMutation.data?.profile as
+    | VibeProfileResult
+    | undefined;
+
   // ── Navigation ─────────────────────────────────────────────────────
 
   const goToStep = useCallback(
@@ -99,7 +110,7 @@ export default function OnBoardClient() {
       setDirection(target > step ? 1 : -1);
       setStep(target);
     },
-    [step, images.length],
+    [step, images.length, generatedProfile],
   );
 
   const goNext = useCallback(() => {
@@ -209,9 +220,6 @@ export default function OnBoardClient() {
 
   // ── Derived state ──────────────────────────────────────────────────
 
-  const generatedProfile = generateMutation.data?.profile as
-    | VibeProfileResult
-    | undefined;
   const existingProfile = profileQuery.data as VibeProfileResult | undefined;
   const activeProfile = generatedProfile ?? undefined;
 
@@ -224,13 +232,8 @@ export default function OnBoardClient() {
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Animated background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-[100px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-chart-3/5 rounded-full blur-[100px] animate-pulse delay-1000" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gold/3 rounded-full blur-[120px] animate-pulse delay-500" />
-      </div>
+    <div className="min-h-dvh bg-background relative overflow-hidden">
+      <AmbientBackground />
 
       {/* Floating hearts decoration on step 0 */}
       {step === 0 && (
@@ -240,7 +243,11 @@ export default function OnBoardClient() {
       )}
 
       {/* Content */}
-      <div className="relative z-10 container max-w-5xl mx-auto px-4 py-6 md:py-10 pb-24 md:pb-10">
+      {/* pb-fixed-bar reserves the height of the bottom-fixed StepProgress bar
+          plus env(safe-area-inset-bottom). The flat pb-24 it replaces was a
+          hair short of the bar once the home-indicator inset is added, which
+          left the last control partly under it on notched iPhones. */}
+      <div className="relative z-10 container max-w-5xl mx-auto px-4 py-6 md:py-10 pb-fixed-bar md:pb-10">
         {/* Desktop layout: sidebar + main */}
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8">
           {/* ── Desktop Sidebar ─────────────────────────────────── */}
@@ -320,7 +327,7 @@ export default function OnBoardClient() {
                   animate={{ opacity: 1 }}
                   className="flex items-center gap-2 rounded-xl bg-secondary/50 border border-border px-3 py-2.5 text-xs text-muted-foreground"
                 >
-                  <span className="h-2 w-2 rounded-full bg-chart-3 animate-pulse flex-shrink-0" />
+                  <span className="h-2 w-2 rounded-full bg-primary animate-glow-pulse flex-shrink-0" />
                   <span>
                     Current vibe:{" "}
                     <strong className="text-foreground">
@@ -342,13 +349,8 @@ export default function OnBoardClient() {
               className="text-center mb-8"
             >
               <div className="flex items-center justify-center gap-3 mb-2">
-                <motion.div
-                  animate={{ rotate: [0, 360] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                >
-                  <Sparkles className="w-7 h-7 text-primary" />
-                </motion.div>
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold bg-linear-to-r from-primary via-chart-3 to-chart-2 bg-clip-text text-transparent">
+                                  <Sparkles className="w-7 h-7 text-primary" />
+                <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-foreground">
                   {step === 2 ? "Your Vibe" : "Discovery Adventure"}
                 </h1>
               </div>
@@ -367,7 +369,7 @@ export default function OnBoardClient() {
                   animate={{ opacity: 1 }}
                   className="lg:hidden mt-3 inline-flex items-center gap-2 rounded-full bg-secondary/50 border border-border px-3 py-1.5 text-xs text-muted-foreground"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-chart-3 animate-pulse" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary animate-glow-pulse" />
                   Current:{" "}
                   <strong className="text-foreground">
                     {existingProfile.vibeName}
@@ -484,7 +486,7 @@ export default function OnBoardClient() {
                           onClick={handleSubmit}
                           disabled={!canSubmitFromStep1 || isPending}
                           size="lg"
-                          className="px-8 group bg-linear-to-r from-primary to-chart-3 hover:from-primary/90 hover:to-chart-3/90"
+                          className="px-8 group bg-primary hover:bg-primary/90"
                         >
                           {isPending ? (
                             <>

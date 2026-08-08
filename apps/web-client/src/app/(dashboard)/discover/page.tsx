@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import {
@@ -32,6 +32,8 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CardError } from "@/components/error-display";
+import { DemoProfileBadge } from "@/components/discover/demo-profile-badge";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -44,6 +46,8 @@ type Candidate = {
   interestTags?: string[];
   styleTags?: string[];
   moodTags?: string[];
+  /** Set server-side for the seeded sample profiles. See DemoProfileBadge. */
+  isDemo?: boolean;
 };
 
 type MatchUserProfile = {
@@ -58,6 +62,8 @@ type MatchUserProfile = {
   photoUrls: string[];
   interestTags: string[];
   isVerified: boolean;
+  /** Seeded sample profile — labelled in the chat header. */
+  isDemo?: boolean;
 };
 
 type EnrichedMatch = {
@@ -93,6 +99,7 @@ function toCandidate(item: any): Candidate | null {
       : [],
     styleTags: Array.isArray(profile?.styleTags) ? profile.styleTags : [],
     moodTags: Array.isArray(profile?.moodTags) ? profile.moodTags : [],
+    isDemo: profile?.isDemo === true,
   };
 }
 
@@ -102,21 +109,33 @@ function genderLabel(gender: string | null) {
     male: "♂ Male",
     female: "♀ Female",
     "non-binary": "⚧ Non-binary",
-    "prefer-not-to-say": "—",
+    "prefer-not-to-say": "Not specified",
   };
   return map[gender] ?? gender;
+}
+
+/**
+ * Vector similarity is a cosine score. Showing "Sim: 0.87" to someone using a
+ * dating app leaks the implementation and means nothing to them, so it is
+ * bucketed into language they can act on.
+ */
+function similarityLabel(score: number) {
+  if (score >= 0.85) return "Strong match";
+  if (score >= 0.7) return "Good match";
+  if (score >= 0.55) return "Some overlap";
+  return "Worth a look";
 }
 
 function energyColor(energy: string | null) {
   switch (energy) {
     case "chill":
-      return "bg-blue-500/10 text-blue-700 dark:text-blue-300";
+      return "bg-primary/10 text-primary/75";
     case "moderate":
-      return "bg-green-500/10 text-green-700 dark:text-green-300";
+      return "bg-primary/[0.18] text-primary";
     case "high":
-      return "bg-orange-500/10 text-orange-700 dark:text-orange-300";
+      return "bg-primary/[0.28] text-primary";
     case "chaotic":
-      return "bg-red-500/10 text-red-700 dark:text-red-300";
+      return "bg-primary text-primary-foreground";
     default:
       return "";
   }
@@ -148,22 +167,20 @@ function AvatarImg({
   );
 }
 
+/**
+ * The side of the match that is not the signed-in user.
+ *
+ * This used to infer "me" as the id shared by every match, which needs at least
+ * two matches to be decidable — so on a user's very first match it fell back to
+ * `userB` and showed them their own profile roughly half the time. The id now
+ * comes from `users.getMe`, which is correct at one match.
+ */
 function getOtherUser(
   match: EnrichedMatch,
-  myMatches: EnrichedMatch[],
+  myId: string | null,
 ): MatchUserProfile {
-  // Determine which side is "me" by finding the ID that appears in every match
-  if (myMatches.length >= 2) {
-    const ids = myMatches.map((m) => [m.userAId, m.userBId]).flat();
-    const freq = new Map<string, number>();
-    for (const id of ids) freq.set(id, (freq.get(id) ?? 0) + 1);
-    const myId = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (myId) {
-      return myId === match.userAId ? match.userB : match.userA;
-    }
-  }
-  // Fallback: return userB
-  return match.userB;
+  if (!myId) return match.userB;
+  return myId === match.userAId ? match.userB : match.userA;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -193,6 +210,7 @@ export default function DiscoverPage() {
   // Queries
   // ═══════════════════════════════════════════════════════════════════
 
+  const meQuery = useQuery(trpc.users.getMe.queryOptions());
   const vibeMatchQuery = useQuery(trpc.llm.vibeMatch.queryOptions({}));
   const connectionsQuery = useQuery(
     trpc.social.listConnections.queryOptions({ status: "pending" }),
@@ -375,10 +393,22 @@ export default function DiscoverPage() {
     return raw.map(toCandidate).filter(Boolean) as Candidate[];
   }, [response]);
 
-  const matches = (matchesQuery.data ?? []) as EnrichedMatch[];
+  const myId = meQuery.data?.id ?? null;
+  /* Memoised for the same reason as `messages` below — the effects that pick a
+     default match depend on it, and an inline `?? []` re-ran them every render. */
+  const matches = useMemo(
+    () => (matchesQuery.data ?? []) as EnrichedMatch[],
+    [matchesQuery.data],
+  );
   const pendingIncoming = (connectionsQuery.data ?? []) as Array<any>;
   const plan = (planQuery.data ?? generatePlanMutation.data ?? null) as any;
-  const messages = messagesQuery.data?.items ?? [];
+  /* Memoised because `data?.items ?? []` is a new array on every render, and
+     the auto-scroll effect below depends on it — an unmemoised fallback made
+     the chat smooth-scroll the document continuously. */
+  const messages = useMemo(
+    () => messagesQuery.data?.items ?? [],
+    [messagesQuery.data],
+  );
 
   const selectedMatch = matches.find((m) => m.id === selectedMatchId);
 
@@ -434,12 +464,21 @@ export default function DiscoverPage() {
     setSelectedMatchId(latestMatch.id);
   }, [matches, autogenMatchId]);
 
+  /* Auto-generate the plan at most once per match id.
+     `generatePlanMutation` is a new object on every state transition, so having
+     it in the dependency array re-ran this effect the instant a request failed,
+     which re-fired an expensive LLM + Places procedure in an unbounded loop.
+     The ref is the guard; the mutation is deliberately not a dependency. */
+  const autogenRequestedRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!autogenMatchId) return;
     if (plan) return;
-    if (generatePlanMutation.isPending) return;
+    if (autogenRequestedRef.current === autogenMatchId) return;
+    autogenRequestedRef.current = autogenMatchId;
     generatePlanMutation.mutate({ matchId: autogenMatchId });
-  }, [autogenMatchId, plan, generatePlanMutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autogenMatchId, plan]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -521,6 +560,13 @@ export default function DiscoverPage() {
     });
   };
 
+  const retryGeneratePlan = () => {
+    const matchId = selectedMatchId ?? autogenMatchId;
+    if (!matchId) return;
+    autogenRequestedRef.current = matchId;
+    generatePlanMutation.mutate({ matchId });
+  };
+
   const handleSendMessage = () => {
     if (!selectedMatchId || !chatInput.trim()) return;
     sendMessageMutation.mutate({
@@ -536,7 +582,7 @@ export default function DiscoverPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
           Match Center
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -592,6 +638,18 @@ export default function DiscoverPage() {
                     <Skeleton key={i} className="h-40 rounded-xl bg-muted" />
                   ))}
                 </div>
+              ) : vibeMatchQuery.isError ? (
+                /* Without this branch a failed query fell through to the empty
+                   state and told the user to complete a profile they already
+                   have. */
+                <CardError
+                  title="Couldn't load candidates"
+                  message={
+                    vibeMatchQuery.error?.message ??
+                    "We couldn't reach the matching service."
+                  }
+                  onRetry={() => vibeMatchQuery.refetch()}
+                />
               ) : candidates.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
                   <Sparkles className="h-10 w-10 text-muted-foreground/50" />
@@ -617,13 +675,21 @@ export default function DiscoverPage() {
                     return (
                       <div
                         key={candidate.userId}
-                        className="group overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 p-4 transition hover:shadow-md"
+                        className="group overflow-hidden rounded-xl border border-border bg-card p-4 transition hover:shadow-md"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-lg font-semibold text-foreground">
-                              {candidate.vibeName ?? "Unknown Vibe"}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-lg font-semibold text-foreground">
+                                {candidate.vibeName ?? "Unknown Vibe"}
+                              </p>
+                              {/* Sample profiles never reply. Saying so beats
+                                  letting someone wait for a message that
+                                  cannot come. */}
+                              {candidate.isDemo && (
+                                <DemoProfileBadge className="shrink-0" />
+                              )}
+                            </div>
                             <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                               {candidate.vibeSummary ?? "No summary"}
                             </p>
@@ -701,8 +767,20 @@ export default function DiscoverPage() {
 
         {/* ═══════════════════ CONNECTED TAB ═══════════════════ */}
         <TabsContent value="connected" className="space-y-4">
-          {matchesQuery.isLoading ? (
+          {/* meQuery gates the list too: getOtherUser needs the real user id,
+              and rendering before it lands would briefly show the user their
+              own profile. */}
+          {matchesQuery.isLoading || meQuery.isLoading ? (
             <Skeleton className="h-64 rounded-xl bg-muted" />
+          ) : matchesQuery.isError ? (
+            <CardError
+              title="Couldn't load your matches"
+              message={
+                matchesQuery.error?.message ??
+                "We couldn't reach your match list."
+              }
+              onRetry={() => matchesQuery.refetch()}
+            />
           ) : matches.length === 0 ? (
             <Card className="border-border">
               <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -727,7 +805,7 @@ export default function DiscoverPage() {
                   Your Matches ({matches.length})
                 </p>
                 {matches.map((match) => {
-                  const other = getOtherUser(match, matches);
+                  const other = getOtherUser(match, myId);
                   const isActive = selectedMatchId === match.id;
                   return (
                     <button
@@ -765,7 +843,7 @@ export default function DiscoverPage() {
                             </Badge>
                           )}
                           <span className="text-[10px] text-muted-foreground">
-                            Sim: {Number(match.similarity ?? 0).toFixed(2)}
+                            {similarityLabel(Number(match.similarity ?? 0))}
                           </span>
                         </div>
                       </div>
@@ -788,7 +866,7 @@ export default function DiscoverPage() {
                   <>
                     {/* Partner profile card */}
                     {(() => {
-                      const other = getOtherUser(selectedMatch, matches);
+                      const other = getOtherUser(selectedMatch, myId);
                       return (
                         <Card className="overflow-hidden border-border">
                           <div className="flex flex-col gap-4 p-4 sm:flex-row">
@@ -801,17 +879,17 @@ export default function DiscoverPage() {
                                       key={i}
                                       src={url}
                                       alt={`${other.displayName} photo ${i + 1}`}
-                                      className="h-28 w-28 shrink-0 rounded-lg object-cover ring-1 ring-border"
+                                      className="h-28 w-28 shrink-0 rounded-xl object-cover ring-1 ring-border"
                                     />
                                   ))
                               ) : other.imageUrl ? (
                                 <img
                                   src={other.imageUrl}
                                   alt={other.displayName}
-                                  className="h-28 w-28 shrink-0 rounded-lg object-cover ring-1 ring-border"
+                                  className="h-28 w-28 shrink-0 rounded-xl object-cover ring-1 ring-border"
                                 />
                               ) : (
-                                <div className="flex h-28 w-28 items-center justify-center rounded-lg bg-muted">
+                                <div className="flex h-28 w-28 items-center justify-center rounded-xl bg-muted">
                                   <Users className="h-8 w-8 text-muted-foreground" />
                                 </div>
                               )}
@@ -824,6 +902,11 @@ export default function DiscoverPage() {
                                 {other.isVerified && (
                                   <ShieldCheck className="h-4 w-4 text-primary" />
                                 )}
+                                {/* Labelled here as well as on the card: the
+                                    chat is where someone would otherwise wait
+                                    for a reply from what they took to be a
+                                    person. */}
+                                {other.isDemo && <DemoProfileBadge />}
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5">
                                 {other.gender && (
@@ -885,7 +968,7 @@ export default function DiscoverPage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="mb-3 h-72 space-y-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-3">
+                        <div className="mb-3 h-72 space-y-2 overflow-y-auto rounded-xl border border-border bg-muted/20 p-3">
                           {messagesQuery.isLoading ? (
                             <div className="flex items-center justify-center py-8">
                               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -936,7 +1019,10 @@ export default function DiscoverPage() {
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             placeholder="Type a message..."
-                            className="flex-1 rounded-full border border-input bg-background px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                            // text-base below md: iOS Safari zooms in on any
+                            // input under 16px, and a chat field is the one
+                            // people focus most.
+                            className="min-w-0 flex-1 rounded-full border border-input bg-background px-4 py-2 text-base outline-none focus:ring-2 focus:ring-ring md:text-sm"
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -947,6 +1033,7 @@ export default function DiscoverPage() {
                           <Button
                             size="icon"
                             className="h-9 w-9 shrink-0 rounded-full"
+                            aria-label="Send message"
                             disabled={
                               !chatInput.trim() || sendMessageMutation.isPending
                             }
@@ -970,10 +1057,10 @@ export default function DiscoverPage() {
 
         {/* ═══════════════════ MISSION TAB ═══════════════════ */}
         <TabsContent value="mission" className="space-y-4">
-          {matches.length > 0 && (
+          {matches.length > 0 && myId && (
             <div className="flex gap-2 overflow-x-auto pb-2">
               {matches.map((match) => {
-                const other = getOtherUser(match, matches);
+                const other = getOtherUser(match, myId);
                 return (
                   <button
                     key={match.id}
@@ -1007,8 +1094,8 @@ export default function DiscoverPage() {
             <CardContent className="space-y-4">
               {isMissionLoading && !plan ? (
                 <div className="space-y-3">
-                  <Skeleton className="h-20 rounded-lg bg-muted" />
-                  <Skeleton className="h-32 rounded-lg bg-muted" />
+                  <Skeleton className="h-20 rounded-xl bg-muted" />
+                  <Skeleton className="h-32 rounded-xl bg-muted" />
                 </div>
               ) : !selectedMatchId ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -1017,6 +1104,15 @@ export default function DiscoverPage() {
                     Connect with someone to unlock missions.
                   </p>
                 </div>
+              ) : !plan && generatePlanMutation.isError ? (
+                <CardError
+                  title="Mission planning failed 💔"
+                  message={
+                    generatePlanMutation.error?.message ??
+                    "We couldn't build your mission. Give it another try."
+                  }
+                  onRetry={retryGeneratePlan}
+                />
               ) : !plan ? (
                 <div className="flex items-center justify-center gap-2 py-8">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -1027,15 +1123,15 @@ export default function DiscoverPage() {
               ) : (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 p-4">
+                    <div className="rounded-xl border border-border bg-card p-4">
                       <p className="text-xs text-muted-foreground">
-                        Similarity Score
+                        Vibe overlap
                       </p>
-                      <p className="text-2xl font-bold text-primary">
-                        {Number(plan.similarityScore ?? 0).toFixed(2)}
+                      <p className="font-display text-2xl font-semibold text-primary">
+                        {Math.round(Number(plan.similarityScore ?? 0) * 100)}%
                       </p>
                     </div>
-                    <div className="rounded-xl border border-border bg-gradient-to-br from-card to-muted/30 p-4">
+                    <div className="rounded-xl border border-border bg-card p-4">
                       <p className="text-xs text-muted-foreground">
                         Success Probability
                       </p>
@@ -1193,7 +1289,7 @@ export default function DiscoverPage() {
                                 <img
                                   src={proofPreview}
                                   alt="Proof preview"
-                                  className="h-32 w-auto rounded-lg object-cover ring-1 ring-border"
+                                  className="h-32 w-auto rounded-xl object-cover ring-1 ring-border"
                                 />
                                 <button
                                   type="button"
@@ -1245,7 +1341,7 @@ export default function DiscoverPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {levelQuery.isLoading ? (
-                <Skeleton className="h-24 rounded-lg bg-muted" />
+                <Skeleton className="h-24 rounded-xl bg-muted" />
               ) : (
                 <>
                   <div className="flex items-center gap-4">
@@ -1319,7 +1415,7 @@ export default function DiscoverPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {pointsHistoryQuery.isLoading ? (
-                <Skeleton className="h-32 rounded-lg bg-muted" />
+                <Skeleton className="h-32 rounded-xl bg-muted" />
               ) : !(pointsHistoryQuery.data as any)?.length ? (
                 <div className="flex flex-col items-center gap-2 py-8 text-center">
                   <Trophy className="h-8 w-8 text-muted-foreground/30" />
@@ -1331,14 +1427,14 @@ export default function DiscoverPage() {
                 (pointsHistoryQuery.data as any[]).map((entry: any) => (
                   <div
                     key={entry.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
+                    className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2"
                   >
                     <div className="flex items-center gap-3">
                       <div
                         className={`flex h-8 w-8 items-center justify-center rounded-full ${
                           entry.delta > 0
                             ? "bg-green-500/10 text-green-600"
-                            : "bg-red-500/10 text-red-600"
+                            : "bg-destructive/10 text-destructive"
                         }`}
                       >
                         {entry.reason === "mission-completed" ? (
@@ -1367,7 +1463,7 @@ export default function DiscoverPage() {
                       className={
                         entry.delta > 0
                           ? "bg-green-500/10 text-green-700"
-                          : "bg-red-500/10 text-red-700"
+                          : "bg-destructive/10 text-destructive"
                       }
                     >
                       {entry.delta > 0 ? "+" : ""}
@@ -1392,7 +1488,7 @@ export default function DiscoverPage() {
             </CardHeader>
             <CardContent>
               {rewardsQuery.isLoading ? (
-                <Skeleton className="h-40 rounded-lg bg-muted" />
+                <Skeleton className="h-40 rounded-xl bg-muted" />
               ) : !(rewardsQuery.data as any)?.length ? (
                 <p className="text-sm text-muted-foreground">
                   No rewards available yet.
@@ -1405,10 +1501,10 @@ export default function DiscoverPage() {
                     return (
                       <div
                         key={reward.id}
-                        className="rounded-xl border border-border bg-gradient-to-br from-card to-muted/20 p-4"
+                        className="rounded-xl border border-border bg-card p-4"
                       >
                         <div className="flex items-start gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-xl">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-xl">
                             {reward.icon}
                           </div>
                           <div className="min-w-0 flex-1">

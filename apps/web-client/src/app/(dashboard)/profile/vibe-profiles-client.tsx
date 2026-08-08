@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VerificationBadge } from "@/components/verification-badge";
+import { CardError } from "@/components/error-display";
 import Link from "next/link";
 import { Camera, Images, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -318,6 +319,26 @@ export default function VibeProfilesClient() {
     );
   }
 
+  /* A failed request is not an empty profile. Falling through to the block
+     below told returning users their profile did not exist and sent them back
+     through onboarding. */
+  if (profileQuery.isError || userQuery.isError) {
+    return (
+      <CardError
+        title="Couldn't load your vibe profile"
+        message={
+          profileQuery.error?.message ??
+          userQuery.error?.message ??
+          "Your profile is still there — we just couldn't reach it. Try again."
+        }
+        onRetry={() => {
+          if (profileQuery.isError) void profileQuery.refetch();
+          if (userQuery.isError) void userQuery.refetch();
+        }}
+      />
+    );
+  }
+
   if (!profileQuery.data) {
     return (
       <Card>
@@ -339,7 +360,7 @@ export default function VibeProfilesClient() {
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Vibe Profiles</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Vibe Profiles</h1>
           <p className="text-muted-foreground">
             View your vibe gallery, edit your profile, and verify your identity
             in one place.
@@ -355,14 +376,14 @@ export default function VibeProfilesClient() {
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2">
-              <Images className="h-4 w-4 text-rose-500" />
+              <Images className="h-4 w-4 text-primary" />
               Vibe Photos ({photoUrls.length})
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="gap-2 border-rose-200 hover:bg-rose-50"
+                className="gap-2 border-primary/30 hover:bg-primary/10"
                 disabled={
                   photoUrls.length === 0 || regenerateMutation.isPending
                 }
@@ -377,7 +398,7 @@ export default function VibeProfilesClient() {
                 asChild
                 type="button"
                 variant="outline"
-                className="border-rose-200 hover:bg-rose-50"
+                className="border-primary/30 hover:bg-primary/10"
               >
                 <Link href="/on-board">Rebuild with new photos</Link>
               </Button>
@@ -386,7 +407,7 @@ export default function VibeProfilesClient() {
         </CardHeader>
         <CardContent>
           {regenerateMessage ? (
-            <p className="mb-3 text-sm text-rose-600">{regenerateMessage}</p>
+            <p className="mb-3 text-sm text-primary">{regenerateMessage}</p>
           ) : null}
 
           {regenerateMutation.error ? (
@@ -429,7 +450,7 @@ export default function VibeProfilesClient() {
       <Card className="border-border/70 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-rose-500" />
+            <Sparkles className="h-4 w-4 text-primary" />
             Edit Vibe
           </CardTitle>
         </CardHeader>
@@ -454,7 +475,7 @@ export default function VibeProfilesClient() {
                 }
                 maxLength={500}
                 rows={3}
-                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
+                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-xl border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
                 placeholder="A short summary of your vibe"
               />
             </div>
@@ -466,7 +487,7 @@ export default function VibeProfilesClient() {
                 onChange={(event) => setField("bio", event.target.value)}
                 maxLength={500}
                 rows={4}
-                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
+                className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-xl border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-[3px]"
                 placeholder="Tell people who you are"
               />
             </div>
@@ -482,7 +503,7 @@ export default function VibeProfilesClient() {
                       event.target.value as ProfileFormState["gender"],
                     )
                   }
-                  className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
+                  className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-xl border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
                 >
                   <option value="">Choose</option>
                   <option value="male">♂ Male</option>
@@ -502,7 +523,7 @@ export default function VibeProfilesClient() {
                       event.target.value as ProfileFormState["interestedIn"],
                     )
                   }
-                  className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
+                  className="border-input focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-xl border bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px]"
                 >
                   <option value="">Choose</option>
                   <option value="male">♂ Male</option>
@@ -528,7 +549,7 @@ export default function VibeProfilesClient() {
             </div>
 
             {savedMessage ? (
-              <p className="text-sm text-rose-600">{savedMessage}</p>
+              <p className="text-sm text-primary">{savedMessage}</p>
             ) : null}
 
             {updateMutation.error ? (
@@ -540,7 +561,7 @@ export default function VibeProfilesClient() {
             <Button
               type="submit"
               disabled={updateMutation.isPending}
-              className="bg-rose-500 text-white hover:bg-rose-600"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
@@ -551,7 +572,7 @@ export default function VibeProfilesClient() {
       <Card className="border-border/70 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-rose-500" />
+            <ShieldCheck className="h-4 w-4 text-primary" />
             Get Verified
           </CardTitle>
         </CardHeader>
@@ -571,7 +592,7 @@ export default function VibeProfilesClient() {
                 <div className="space-y-3">
                   <video
                     ref={videoRef}
-                    className="h-56 w-full rounded-md border object-cover"
+                    className="h-56 w-full rounded-xl border object-cover"
                     muted
                     playsInline
                   />
@@ -579,7 +600,7 @@ export default function VibeProfilesClient() {
                     <Button
                       onClick={captureFromCamera}
                       type="button"
-                      className="bg-rose-500 text-white hover:bg-rose-600"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       Capture
                     </Button>
@@ -597,7 +618,7 @@ export default function VibeProfilesClient() {
                   onClick={enableCamera}
                   type="button"
                   variant="outline"
-                  className="gap-2 border-rose-200 hover:bg-rose-50"
+                  className="gap-2 border-primary/30 hover:bg-primary/10"
                 >
                   <Camera className="h-4 w-4" />
                   Open Webcam
@@ -625,20 +646,20 @@ export default function VibeProfilesClient() {
             <img
               src={capturedSelfie}
               alt="Captured selfie"
-              className="max-h-64 w-full rounded-md border border-border/70 object-cover shadow-sm"
+              className="max-h-64 w-full rounded-xl border border-border/70 object-cover shadow-sm"
             />
           ) : uploadedSelfiePreview ? (
             <img
               src={uploadedSelfiePreview}
               alt="Uploaded selfie"
-              className="max-h-64 w-full rounded-md border border-border/70 object-cover shadow-sm"
+              className="max-h-64 w-full rounded-xl border border-border/70 object-cover shadow-sm"
             />
           ) : null}
 
           <Button
             disabled={!verificationReady || verificationMutation.isPending}
             onClick={onVerify}
-            className="bg-rose-500 text-white hover:bg-rose-600"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {verificationMutation.isPending
               ? "Verifying..."
@@ -661,7 +682,7 @@ export default function VibeProfilesClient() {
           ) : null}
 
           {verifyResult ? (
-            <div className="rounded-md border border-border bg-card p-4 text-sm">
+            <div className="rounded-xl border border-border bg-card p-4 text-sm">
               <p className="font-medium">
                 {verifyResult.verified
                   ? "You’re verified 🎉"
