@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { generateMultimodalJSON, type ImageInput } from "../lib/gemini.js";
+import { generateMultimodalJSON, type ImageInput } from "../lib/ai.js";
 import { formatPrompt } from "../lib/prompt-formatter.js";
 import {
   VERIFICATION_FALLBACK,
   type VerificationIdentityResult,
 } from "../lib/fallbacks.js";
 import { requireServiceToken } from "../lib/auth.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -66,11 +67,11 @@ router.post("/", requireServiceToken(), async (req, res) => {
         prompt,
         [profilePhoto, freshSelfie] as ImageInput[],
         2,
-        "gemini-2.5-flash",
+        process.env.OPENAI_MODEL || "gpt-4o",
       );
       result = verifyResponseSchema.parse(parsed);
     } catch (llmError) {
-      console.error("❌ verify-identity failed, using fallback:", llmError);
+      logger.error("verify-identity failed, using fallback", llmError);
       result = VERIFICATION_FALLBACK;
       usedFallback = true;
     }
@@ -79,7 +80,7 @@ router.post("/", requireServiceToken(), async (req, res) => {
       data: result,
       meta: {
         durationMs: Date.now() - startTime,
-        model: "gemini-2.5-flash",
+        model: "openai",
         usedFallback,
       },
     });

@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { generateMultimodalJSON, type ImageInput } from "../lib/gemini.js";
+import { generateMultimodalJSON, type ImageInput } from "../lib/ai.js";
 import { requireServiceToken } from "../lib/auth.js";
 import { streamWingmanSpeech } from "../lib/elevenlabs.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -23,7 +24,7 @@ type RealtimeCoachResult = {
   confidence: number;
 };
 
-const realtimeModelCandidates = ["gemini-2.5-flash"].filter(
+const realtimeModelCandidates = [process.env.OPENAI_FAST_MODEL || "gpt-4o-mini"].filter(
   (value): value is string => typeof value === "string" && value.length > 0,
 );
 
@@ -67,7 +68,7 @@ async function generateRealtimeCoachSuggestion(
     throw lastError;
   }
 
-  throw new Error("No valid realtime Gemini model available");
+  throw new Error("No valid realtime model available");
 }
 
 router.post("/", requireServiceToken(), async (req, res) => {
@@ -136,7 +137,7 @@ router.post("/", requireServiceToken(), async (req, res) => {
       return;
     }
 
-    console.error("❌ realtime-coach failed:", error);
+    logger.error("realtime-coach failed", error);
     res.json({
       data: {
         suggestion:
@@ -186,10 +187,19 @@ router.post("/tts", requireServiceToken(), async (req, res) => {
       return;
     }
 
-    console.error("❌ realtime-coach tts failed:", error);
+    logger.error("realtime-coach tts failed", error);
     res.status(500).json({
       error: "Failed to synthesize speech",
-      message: error instanceof Error ? error.message : "Unknown error",
+      // Gated, unlike before. ElevenLabs SDK errors carry account and quota
+      // detail, and this handler returned them to the caller unconditionally —
+      // the only route that skipped the NODE_ENV check the global handler in
+      // app.ts applies.
+      message:
+        process.env.NODE_ENV === "development"
+          ? error instanceof Error
+            ? error.message
+            : "Unknown error"
+          : undefined,
     });
   }
 });

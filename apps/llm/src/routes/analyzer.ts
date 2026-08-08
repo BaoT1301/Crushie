@@ -11,13 +11,12 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { generateMultimodalJSON, type ImageInput } from "../lib/gemini.js";
+import { generateMultimodalJSON, type ImageInput } from "../lib/ai.js";
 import { profileAnalyzerPrompt } from "../lib/vibe-prompts.js";
 import { generateMockAnalyzerSession } from "../lib/mock-data.js";
 import { ANALYZER_FALLBACK, type AnalyzerResult } from "../lib/fallbacks.js";
 import { requireServiceToken } from "../lib/auth.js";
 import { getCachedResponse, setCachedResponse } from "../lib/redis.js";
-import { callLLM } from "../lib/llm-client.js"; 
 
 const router = Router();
 const TARGET_OPENER_COUNT = 8;
@@ -50,7 +49,7 @@ function classifyFallbackSource(error: unknown): FallbackSource {
 
   if (
     name.includes("google") ||
-    message.includes("gemini") ||
+    message.includes("openai") ||
     message.includes("api") ||
     message.includes("fetch") ||
     message.includes("network") ||
@@ -303,7 +302,7 @@ const mockAnalyzeSchema = z.object({
 // POST / — Analyze a profile screenshot via Gemini (production)
 // ──────────────────────────────────────────────────────────────────────────
 
-router.post("/", async (req, res) => {
+router.post("/", requireServiceToken(), async (req, res) => {
   try {
     const parsed = analyzeSchema.parse(req.body);
     const { userId, imageHash, hintTags, environmentContext } = parsed;
@@ -352,7 +351,7 @@ router.post("/", async (req, res) => {
           vibePrediction: analyzerResult.vibePrediction,
           conversationOpeners: analyzerResult.conversationOpeners,
           dateSuggestions: analyzerResult.suggestedMissions,
-          modelVersion: "gemini-2.5-flash",
+          modelVersion: "openai",
           latencyMs: Date.now() - startTime,
         },
         meta: { cached: true, durationMs: Date.now() - startTime },
@@ -363,20 +362,25 @@ router.post("/", async (req, res) => {
     // Call Gemini with the screenshot(s) + prompt
     let analyzerResult: AnalyzerResult;
     let usedFallback = false;
-    let llmProvider = "gemini-2.5-flash";
+    const llmProvider = "openai";
 
     try {
-      // Use Gemini with Azure OpenAI fallback
-      const { response, provider } = await callLLM(prompt);
-      llmProvider = provider;
+      // Sends the screenshots WITH the prompt. This previously called
+      // callLLM(prompt), which is text-only: the images array was built,
+      // validated non-empty, then used only for .length in logging and the
+      // cache key. The bytes never reached the model, so the "screenshot
+      // analyzer" was inventing results from hintTags and an image hash while
+      // presenting them as if it had looked at the photos.
+      const analyzed = await generateMultimodalJSON<AnalyzerResult>(
+        prompt,
+        images,
+      );
   
-      // Parse JSON response
-      const cleanResponse = response.replace(/```json\n?|\n?```/g, "").trim();
-      const parsed = JSON.parse(cleanResponse) as AnalyzerResult;
-  
-      analyzerResult = normalizeAnalyzerResult(parsed);
-  
-      console.log(`✅ Analyzer used: ${provider}`);
+      analyzerResult = normalizeAnalyzerResult(analyzed);
+
+      console.log(
+        `✅ Analyzer used: ${llmProvider} (${images.length} image(s))`,
+      );
     } catch (llmError) {
       logAnalyzerFallback({
         error: llmError,
@@ -406,7 +410,7 @@ router.post("/", async (req, res) => {
         vibePrediction: analyzerResult.vibePrediction,
         conversationOpeners: analyzerResult.conversationOpeners,
         dateSuggestions: analyzerResult.suggestedMissions,
-        modelVersion: usedFallback ? "fallback-v1.0.0" : (llmProvider === "azure-phi4" ? "phi-4-mini-instruct" : "gemini-2.0-flash"),
+        modelVersion: usedFallback ? "fallback-v1.0.0" : ("openai"),
         latencyMs: durationMs,
       },
       meta: {
@@ -448,7 +452,7 @@ router.post("/mock", async (req, res) => {
         mock: true,
         durationMs,
         message:
-          "This is mock data. Use POST /api/analyzer for real Gemini analysis.",
+          "This is mock data. Use POST /api/analyzer for real AI analysis.",
       },
     });
   } catch (error) {

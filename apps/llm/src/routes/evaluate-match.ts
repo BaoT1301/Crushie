@@ -14,7 +14,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { generateJSONWithRetry } from "../lib/gemini.js";
+import { generateJSONWithRetry } from "../lib/ai.js";
 import { compatibilityPrompt } from "../lib/vibe-prompts.js";
 import {
   COMPATIBILITY_FALLBACK,
@@ -78,7 +78,13 @@ const missionPlanSchema = z
       .object({
         title: z.string().min(1),
         task: z.string().min(1),
-        location_id: z.string().min(1),
+        // Not .min(1): the prompt asks the model to pick a location_id from
+        // placeCandidates, and there are none when GOOGLE_MAPS_API_KEY is
+        // unset. Requiring a non-empty string made the model's correct answer
+        // ("no candidates, so no id") fail validation, so EVERY compatibility
+        // evaluation silently fell back to canned text on any setup without
+        // Maps configured. Downstream already handles an empty id.
+        location_id: z.string(),
       })
       .strict(),
     similarityScore: z.number().min(0).max(1),
@@ -201,7 +207,7 @@ router.post("/", requireServiceToken(), async (req, res) => {
       }
     } catch (llmError) {
       console.error(
-        "❌ Gemini compatibility evaluation failed, using fallback:",
+        "❌ AI compatibility evaluation failed, using fallback:",
         llmError,
       );
       const fallbackLocation =
@@ -231,7 +237,7 @@ router.post("/", requireServiceToken(), async (req, res) => {
         cached: false,
         durationMs,
         usedFallback,
-        model: "gemini-2.5-flash",
+        model: "openai",
         profileAId: profileA.userId,
         profileBId: profileB.userId,
         vectorSimilarity: vectorSimilarity ?? null,
@@ -298,7 +304,7 @@ router.post("/mock", async (req, res) => {
         mock: true,
         durationMs,
         message:
-          "This is mock data. Use POST /api/evaluate-match for real Gemini analysis.",
+          "This is mock data. Use POST /api/evaluate-match for real AI analysis.",
       },
     });
   } catch (error) {

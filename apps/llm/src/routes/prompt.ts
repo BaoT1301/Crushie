@@ -8,8 +8,9 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { generateFromPrompt, generateJSON } from "../lib/gemini.js";
+import { generateFromPrompt, generateJSON } from "../lib/ai.js";
 import { formatPrompt } from "../lib/prompt-formatter.js";
+import { requireServiceToken } from "../lib/auth.js";
 import {
   PROMPT_TEMPLATES,
   AVAILABLE_TEMPLATES,
@@ -31,7 +32,7 @@ const runTemplateSchema = z.object({
   cache: z.boolean().optional().default(true),
 });
 
-router.post("/run", async (req, res) => {
+router.post("/run", requireServiceToken(), async (req, res) => {
   try {
     const { template, input, context, parseJson, cache } =
       runTemplateSchema.parse(req.body);
@@ -118,7 +119,7 @@ const rawPromptSchema = z.object({
   cache: z.boolean().optional().default(false),
 });
 
-router.post("/raw", async (req, res) => {
+router.post("/raw", requireServiceToken(), async (req, res) => {
   try {
     const body = rawPromptSchema.parse(req.body);
     const prompt = formatPrompt({

@@ -215,7 +215,7 @@ export const analyzeCrushProfile = createPromptTemplate({
         duration: "string — e.g. 2-3 hours",
       },
     ],
-    modelVersion: "gemini-2.0-flash",
+    modelVersion: "openai",
   },
   examples: [
     {
@@ -265,7 +265,7 @@ export const analyzeCrushProfile = createPromptTemplate({
             duration: "2-3 hours",
           },
         ],
-        modelVersion: "gemini-2.0-flash",
+        modelVersion: "openai",
       },
     },
   ],

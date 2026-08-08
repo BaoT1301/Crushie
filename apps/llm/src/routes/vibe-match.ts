@@ -10,13 +10,18 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { generateJSONWithRetry } from "../lib/gemini.js";
+import { generateJSONWithRetry } from "../lib/ai.js";
 import { compatibilityPrompt } from "../lib/vibe-prompts.js";
 import { COMPATIBILITY_FALLBACK, type CompatibilityResult } from "../lib/fallbacks.js";
 import { requireServiceToken } from "../lib/auth.js";
 import { getCachedResponse, setCachedResponse } from "../lib/redis.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
+
+// Caps the fan-out. Without this, one request with a large otherUsers
+// array triggers that many parallel Gemini calls, each retried up to 3x.
+const MAX_OTHER_USERS = 25;
 
 // ──────────────────────────────────────────────────────────────────────────
 // Validation Schemas
@@ -84,7 +89,7 @@ async function evaluateCompatibility(
 
     return result;
   } catch (err) {
-    console.error("Error evaluating compatibility", err);
+    logger.error("Error evaluating compatibility", err);
     return COMPATIBILITY_FALLBACK;
   }
 }
@@ -100,7 +105,9 @@ router.post("/", requireServiceToken(), async (req, res) => {
     const currentUser = req.body.profile;
 
     // Fetch all other users
-    const allProfiles = req.body.otherUsers || [];
+  // Capped: without this, one request with a large otherUsers array fans out
+  // to that many parallel model calls, each retried up to 3x.
+  const allProfiles = (req.body.otherUsers ?? []).slice(0, MAX_OTHER_USERS);
 
     // Compute compatibility scores for each
     const results = await Promise.all(
@@ -113,7 +120,6 @@ router.post("/", requireServiceToken(), async (req, res) => {
     // Sort descending by score
     results.sort((a: any, b: any) => b.score - a.score);
     const finalRes = results.slice(0, LIMIT);
-    console.log(finalRes)
     // Return top N matches
     res.json({
       topMatches: results.slice(0, LIMIT),

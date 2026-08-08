@@ -11,7 +11,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { generateMultimodalJSON, type ImageInput } from "../lib/gemini.js";
+import { generateMultimodalJSON, type ImageInput } from "../lib/ai.js";
 import { vibeGenerationPrompt } from "../lib/vibe-prompts.js";
 import { generateMockVibeProfile } from "../lib/mock-data.js";
 import {
@@ -104,7 +104,7 @@ router.post("/", requireServiceToken(), async (req, res) => {
       );
     } catch (llmError) {
       console.error(
-        "❌ Gemini vibe generation failed, using fallback:",
+        "❌ AI vibe generation failed, using fallback:",
         llmError,
       );
       vibeResult = VIBE_GENERATION_FALLBACK;
@@ -130,7 +130,7 @@ router.post("/", requireServiceToken(), async (req, res) => {
         cached: false,
         durationMs,
         usedFallback,
-        model: "gemini-2.5-flash",
+        model: "openai",
       },
     });
   } catch (error) {
@@ -165,7 +165,7 @@ router.post("/mock", async (req, res) => {
         mock: true,
         durationMs,
         message:
-          "This is mock data. Use POST /api/vibe-profile for real Gemini analysis.",
+          "This is mock data. Use POST /api/vibe-profile for real AI analysis.",
       },
     });
   } catch (error) {
