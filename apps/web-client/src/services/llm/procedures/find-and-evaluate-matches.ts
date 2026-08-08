@@ -9,12 +9,16 @@ import { eq, sql, and } from "drizzle-orm";
 import { vibeProfiles } from "@/services/vibe-profiles/schema";
 import { vibeMatches } from "@/services/social/schema";
 import { evaluateMatch, type ProfileSummary } from "../client";
+import { logger } from "@/lib/logger";
 
 // ── Input ───────────────────────────────────────────────────────────────
 
 export const batchEvaluateInput = z.object({
   limit: z.number().int().min(1).max(10).default(5),
-  threshold: z.number().min(0).max(1).default(0.7),
+  // 0.5, not 0.7: real text-embedding-3-small vectors put two distinct people
+  // at roughly 0.55-0.70, so the old default filtered out essentially every
+  // genuine match. See the note in vibe-profiles/procedures/validation.ts.
+  threshold: z.number().min(0).max(1).default(0.5),
   useMock: z.boolean().optional().default(false),
 });
 
@@ -144,7 +148,7 @@ export const findAndEvaluateMatches = authedProcedure
       };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
-      console.error("❌ findAndEvaluateMatches failed:", error);
+      logger.error("findAndEvaluateMatches failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:

@@ -8,10 +8,12 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, and, ne } from "drizzle-orm";
 import { vibeProfiles } from "@/services/vibe-profiles/schema";
+import { logger } from "@/lib/logger";
 import {
   vibeMatch as callVibeMatch,
   type ProfileSummary,
 } from "../client";
+import { mergeCandidates } from "./merge-candidates";
 
 // ── Input ───────────────────────────────────────────────────────────────
 
@@ -111,15 +113,23 @@ export const vibeMatchProcedure = authedProcedure
         useMock: input.useMock,
       });
 
-      // 4. Return the response (with proper structure)
-      // The LLM returns: { data: LLMVibeMatchData, meta: {...} }
-      // We want to return: { data: matches array, meta: {...} }
-      
-      // Option 1: Return the LLM response directly
-      return res;
+      // 4. Guarantee every active profile comes back, ranked ones first.
+      //    See merge-candidates.ts for why the model's own list is not enough.
+      const ranked = Array.isArray(res.topMatches) ? res.topMatches : [];
+      const topMatches = mergeCandidates(ranked, otherProfileList);
+
+      return {
+        ...res,
+        topMatches,
+        meta: {
+          ...(res.meta ?? {}),
+          rankedCount: ranked.length,
+          totalCandidates: topMatches.length,
+        },
+      };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
-      console.error("❌ vibeMatch failed:", error);
+      logger.error("vibeMatch failed", error);
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message:

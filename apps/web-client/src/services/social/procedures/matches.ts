@@ -20,6 +20,8 @@ type MatchUserProfile = {
   interestTags: string[];
   interestedIn: string | null;
   isVerified: boolean;
+  /** Seeded sample profile rather than a person. See buildProfile. */
+  isDemo: boolean;
 };
 
 function buildProfile(
@@ -44,6 +46,10 @@ function buildProfile(
     interestTags: vibeRow?.interestTags ?? [],
     interestedIn: vibeRow?.interestedIn ?? null,
     isVerified: userRow?.isVerified ?? false,
+    // Seeded sample profile. Surfaced so the chat header can label it — that is
+    // where someone would otherwise wait for a reply from what they assume is a
+    // person. Derived from the `demo_` id prefix migration 00011 assigns.
+    isDemo: userId.startsWith("demo_"),
   };
 }
 
