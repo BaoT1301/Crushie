@@ -64,6 +64,28 @@ describe("mergeCandidates", () => {
     expect(mergeCandidates([], all)).toHaveLength(3);
   });
 
+  it("excludes the caller even when the model echoes them back", () => {
+    // The query that builds `allCandidates` already excludes the caller, so the
+    // only way they reappear is the model returning the subject of the
+    // comparison inside its own ranking. It does that occasionally, and the
+    // result was users seeing their own profile in Discover as someone to
+    // connect with.
+    const all = [profile("demo_maya")];
+    const ranked = [
+      { profile: profile("user_me"), narrative: "you and you" },
+      { profile: profile("demo_maya"), narrative: "nice fit" },
+    ] as unknown as VibeMatchEntry[];
+
+    const merged = mergeCandidates(ranked, all, "user_me");
+
+    expect(merged.map((m) => m.profile.userId)).toEqual(["demo_maya"]);
+  });
+
+  it("keeps everyone when no caller id is supplied", () => {
+    const all = ["a", "b"].map(profile);
+    expect(mergeCandidates([], all)).toHaveLength(2);
+  });
+
   it("drops malformed entries rather than emitting undefined ids", () => {
     const all = [profile("a")];
     const malformed = [{ profile: undefined, narrative: "x" }] as unknown as VibeMatchEntry[];

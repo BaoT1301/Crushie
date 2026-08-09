@@ -116,7 +116,11 @@ export const vibeMatchProcedure = authedProcedure
       // 4. Guarantee every active profile comes back, ranked ones first.
       //    See merge-candidates.ts for why the model's own list is not enough.
       const ranked = Array.isArray(res.topMatches) ? res.topMatches : [];
-      const topMatches = mergeCandidates(ranked, otherProfileList);
+      const topMatches = mergeCandidates(
+        ranked,
+        otherProfileList,
+        ctx.user.id,
+      );
 
       return {
         ...res,

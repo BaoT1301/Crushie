@@ -194,6 +194,10 @@ export default function DiscoverPage() {
 
   const defaultTab = searchParams.get("tab") ?? "discover";
   const [activeTab, setActiveTab] = useState(defaultTab);
+  /* Which candidate's Connect click is in flight, so only that card shows a
+     spinner. The mutation's own isPending is a single shared flag and made
+     every card on the page look busy at once. */
+  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [autogenMatchId, setAutogenMatchId] = useState<string | null>(null);
   const [selectedPlaceByMatch, setSelectedPlaceByMatch] = useState<
@@ -212,8 +216,15 @@ export default function DiscoverPage() {
 
   const meQuery = useQuery(trpc.users.getMe.queryOptions());
   const vibeMatchQuery = useQuery(trpc.llm.vibeMatch.queryOptions({}));
+  /* Every connection, not just pending ones.
+
+     This filtered on `status: "pending"`, which was fine while every new
+     request started pending. Sample personas now accept on the spot, so their
+     connection is created `accepted` and was therefore invisible to this
+     query — the card fell back to "Connect" and invited you to connect with
+     someone you had already connected with. */
   const connectionsQuery = useQuery(
-    trpc.social.listConnections.queryOptions({ status: "pending" }),
+    trpc.social.listConnections.queryOptions({}),
   );
   const matchesQuery = useQuery(
     trpc.social.listMatches.queryOptions({ limit: 20 }),
@@ -258,8 +269,11 @@ export default function DiscoverPage() {
   const connectMutation = useMutation(
     trpc.social.sendRequest.mutationOptions({
       onSuccess: async (result) => {
+        // No status filter: the query now fetches every connection, so the
+        // filter has to match or the invalidation misses it and the card keeps
+        // showing stale state.
         await queryClient.invalidateQueries(
-          trpc.social.listConnections.queryFilter({ status: "pending" }),
+          trpc.social.listConnections.queryFilter({}),
         );
         if ((result as any)?.mutual && (result as any)?.targetUserId) {
           await evaluateMatchMutation.mutateAsync({
@@ -272,6 +286,9 @@ export default function DiscoverPage() {
           setActiveTab("connected");
         }
       },
+      // Cleared on settle rather than on success: leaving it set after a
+      // failure would strand that one card in a permanent spinner.
+      onSettled: () => setConnectingId(null),
     }),
   );
 
@@ -400,7 +417,7 @@ export default function DiscoverPage() {
     () => (matchesQuery.data ?? []) as EnrichedMatch[],
     [matchesQuery.data],
   );
-  const pendingIncoming = (connectionsQuery.data ?? []) as Array<any>;
+  const allConnections = (connectionsQuery.data ?? []) as Array<any>;
   const plan = (planQuery.data ?? generatePlanMutation.data ?? null) as any;
   /* Memoised because `data?.items ?? []` is a new array on every render, and
      the auto-scroll effect below depends on it — an unmemoised fallback made
@@ -660,17 +677,37 @@ export default function DiscoverPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {candidates.slice(0, 8).map((candidate) => {
-                    const incoming = pendingIncoming.find(
-                      (conn: any) => conn.requesterId === candidate.userId,
+                    // Only a request still awaiting your answer counts as
+                    // "incoming"; once accepted it is a connection, not a
+                    // decision you still owe someone.
+                    const incoming = allConnections.find(
+                      (conn: any) =>
+                        conn.requesterId === candidate.userId &&
+                        conn.status === "pending",
                     );
-                    const outgoing = pendingIncoming.find(
-                      (conn: any) => conn.addresseeId === candidate.userId,
+                    const outgoing = allConnections.find(
+                      (conn: any) =>
+                        conn.addresseeId === candidate.userId &&
+                        conn.status === "pending",
                     );
-                    const alreadyMatched = matches.some(
-                      (m) =>
-                        m.userAId === candidate.userId ||
-                        m.userBId === candidate.userId,
+                    const connected = allConnections.some(
+                      (conn: any) =>
+                        (conn.addresseeId === candidate.userId ||
+                          conn.requesterId === candidate.userId) &&
+                        conn.status === "accepted",
                     );
+                    const alreadyMatched =
+                      connected ||
+                      matches.some(
+                        (m) =>
+                          m.userAId === candidate.userId ||
+                          m.userBId === candidate.userId,
+                      );
+                    // Per-card, so one click does not spin every button on the
+                    // page. `connectMutation.isPending` is a single shared
+                    // flag, and reading it directly made all eight cards look
+                    // like they were connecting at once.
+                    const isConnecting = connectingId === candidate.userId;
 
                     return (
                       <div
@@ -727,17 +764,18 @@ export default function DiscoverPage() {
                             size="sm"
                             className="bg-primary text-primary-foreground hover:bg-primary/90"
                             disabled={
-                              connectMutation.isPending ||
+                              isConnecting ||
                               Boolean(outgoing) ||
                               alreadyMatched
                             }
-                            onClick={() =>
+                            onClick={() => {
+                              setConnectingId(candidate.userId);
                               connectMutation.mutate({
                                 userId: candidate.userId,
-                              })
-                            }
+                              });
+                            }}
                           >
-                            {connectMutation.isPending ? (
+                            {isConnecting ? (
                               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <Heart className="mr-1.5 h-3.5 w-3.5" />

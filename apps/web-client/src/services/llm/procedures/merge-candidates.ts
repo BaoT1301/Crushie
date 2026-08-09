@@ -26,6 +26,7 @@ export type MergedCandidate = VibeMatchEntry & {
 export function mergeCandidates(
   ranked: VibeMatchEntry[],
   allCandidates: ProfileSummary[],
+  currentUserId?: string,
 ): MergedCandidate[] {
   const rankedIds = new Set(
     ranked.map((entry) => entry.profile?.userId).filter(Boolean),
@@ -37,6 +38,14 @@ export function mergeCandidates(
 
   return [...ranked, ...unranked]
     .filter((entry) => entry.profile?.userId)
+    // The caller is filtered out here as well as in the query that builds
+    // `allCandidates`. That query already excludes them, but `ranked` comes
+    // back from the model, and a model asked to rank a list will occasionally
+    // echo the subject of the comparison into its own results. When it did,
+    // users saw their own profile sitting in Discover as someone to connect
+    // with. Trusting the query alone is only safe if nothing downstream can
+    // reintroduce the row, and here something can.
+    .filter((entry) => !currentUserId || entry.profile.userId !== currentUserId)
     .map((entry) => ({
       ...entry,
       profile: {

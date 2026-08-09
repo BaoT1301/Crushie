@@ -131,24 +131,37 @@ export const evaluateMatchProcedure = authedProcedure
       const effectiveScore =
         compatibility.similarityScore ?? compatibility.score ?? 0;
 
-      // 4. Save vibe match if score > 0.7
-      if (effectiveScore > 0.7) {
-        await ctx.secureDb!.rls(async (tx) => {
-          await tx
-            .insert(vibeMatches)
-            .values({
-              userAId: ctx.user.id,
-              userBId: input.targetUserId,
-              similarity: effectiveScore,
-              compatibility: {
-                narrative: compatibility.narrative,
-                mission: compatibility.mission,
-                successProbability: compatibility.successProbability,
-              },
-            })
-            .onConflictDoNothing();
-        });
-      }
+      /**
+       * The match is always created. It used to be gated on
+       * `effectiveScore > 0.7`.
+       *
+       * This procedure runs only when someone has explicitly connected and the
+       * connection came back mutual, so the user has already said yes and so
+       * has the other side. Letting a model score veto that meant the button
+       * did nothing, with no error and no explanation: no row in vibe_matches,
+       * so nothing in Connected, no chat, and the card returned to "Connect" as
+       * though the click had never happened. Two people who both agreed could
+       * be silently refused.
+       *
+       * Scoring is useful for ranking Discover. It is not a gate on consent.
+       * The score is still recorded on the row, so anything that wants to sort
+       * or filter by it can, on data rather than on a threshold buried here.
+       */
+      await ctx.secureDb!.rls(async (tx) => {
+        await tx
+          .insert(vibeMatches)
+          .values({
+            userAId: ctx.user.id,
+            userBId: input.targetUserId,
+            similarity: effectiveScore,
+            compatibility: {
+              narrative: compatibility.narrative,
+              mission: compatibility.mission,
+              successProbability: compatibility.successProbability,
+            },
+          })
+          .onConflictDoNothing();
+      });
 
       return { compatibility, meta, vectorSimilarity };
     } catch (error) {
