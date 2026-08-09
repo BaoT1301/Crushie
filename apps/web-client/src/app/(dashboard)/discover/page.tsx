@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import {
@@ -34,7 +34,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardError } from "@/components/error-display";
-import { DemoProfileBadge } from "@/components/discover/demo-profile-badge";
 import { supabaseBrowser } from "@/lib/supabase-browser";
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -47,7 +46,7 @@ type Candidate = {
   interestTags?: string[];
   styleTags?: string[];
   moodTags?: string[];
-  /** Set server-side for the seeded sample profiles. See DemoProfileBadge. */
+  /** Seeded persona. Set server-side from the `demo_` id prefix. */
   isDemo?: boolean;
 };
 
@@ -63,7 +62,7 @@ type MatchUserProfile = {
   photoUrls: string[];
   interestTags: string[];
   isVerified: boolean;
-  /** Seeded sample profile — labelled in the chat header. */
+  /** Seeded persona. Still sent by the server; drives the typing indicator. */
   isDemo?: boolean;
 };
 
@@ -370,53 +369,69 @@ export default function DiscoverPage() {
 
   const sendMessageMutation = useMutation(
     trpc.chat.sendMessage.mutationOptions({
-      onSuccess: async (result: any) => {
+      onSuccess: (result: any) => {
         const matchId = selectedMatchId;
         if (!matchId) return;
 
         // Show the sent message straight away. This used to wait on the
         // persona's reply, because the server generated it before responding.
-        await queryClient.invalidateQueries(
+        void queryClient.invalidateQueries(
           trpc.chat.listMessages.queryFilter({ matchId, limit: 50 }),
         );
 
-        if (!result?.awaitingPersonaReply) return;
-
         /**
-         * Hold the typing indicator for a believable beat.
+         * Deliberately NOT awaited, and this callback is deliberately not async.
          *
-         * The model answers in a couple of seconds, which reads as a bot: no
-         * one receives a considered reply that fast. The wait is deliberate,
-         * and it is spent on work rather than idling, since the request is
-         * in flight for part of it.
-         *
-         * The floor is randomised so the rhythm does not become a tell, and it
-         * is a floor rather than a fixed delay: a slow model call is already
-         * long enough and should not have more added on top.
+         * TanStack keeps `isPending` true until onSuccess settles, so awaiting
+         * the persona flow here would hold the send button in a spinner for the
+         * whole ten to fifteen seconds. The waiting belongs to the persona, on
+         * their side of the conversation, not to the person who already
+         * finished typing.
          */
-        const minimumTypingMs = 10_000 + Math.random() * 5_000;
-        const startedAt = Date.now();
-
-        setPersonaTypingMatchId(matchId);
-
-        try {
-          await personaReplyMutation.mutateAsync({ matchId });
-        } finally {
-          const remaining = minimumTypingMs - (Date.now() - startedAt);
-          if (remaining > 0) {
-            await new Promise((resolve) => setTimeout(resolve, remaining));
-          }
-
-          // Cleared before the refetch so the indicator gives way to the
-          // message rather than sitting under it for a frame.
-          setPersonaTypingMatchId(null);
-
-          await queryClient.invalidateQueries(
-            trpc.chat.listMessages.queryFilter({ matchId, limit: 50 }),
-          );
+        if (result?.awaitingPersonaReply) {
+          void runPersonaReply(matchId);
         }
       },
     }),
+  );
+
+  /**
+   * Ask the persona to answer, holding a typing indicator for a believable beat.
+   *
+   * The model answers in a couple of seconds, which reads as a bot: nobody
+   * receives a considered reply that fast. The wait is a floor rather than an
+   * added delay, so a slow completion is not punished with more on top, and it
+   * is randomised so the rhythm does not itself become a tell.
+   */
+  const runPersonaReply = useCallback(
+    async (matchId: string) => {
+      const minimumTypingMs = 10_000 + Math.random() * 5_000;
+      const startedAt = Date.now();
+
+      setPersonaTypingMatchId(matchId);
+
+      try {
+        await personaReplyMutation.mutateAsync({ matchId });
+      } catch {
+        // Swallowed on purpose. The user's own message was delivered before
+        // this ran, so a failed reply should leave the persona quiet rather
+        // than surface an error over a conversation that is otherwise fine.
+      } finally {
+        const remaining = minimumTypingMs - (Date.now() - startedAt);
+        if (remaining > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remaining));
+        }
+
+        // Cleared before the refetch so the indicator gives way to the message
+        // rather than sitting under it for a frame.
+        setPersonaTypingMatchId(null);
+
+        await queryClient.invalidateQueries(
+          trpc.chat.listMessages.queryFilter({ matchId, limit: 50 }),
+        );
+      }
+    },
+    [personaReplyMutation, queryClient, trpc],
   );
 
   const redeemRewardMutation = useMutation(
@@ -769,12 +784,6 @@ export default function DiscoverPage() {
                               <p className="truncate text-lg font-semibold text-foreground">
                                 {candidate.vibeName ?? "Unknown Vibe"}
                               </p>
-                              {/* Sample profiles connect instantly and answer
-                                  in character. Labelling them matters more
-                                  now than when they were silent, not less. */}
-                              {candidate.isDemo && (
-                                <DemoProfileBadge className="shrink-0" />
-                              )}
                             </div>
                             <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                               {candidate.vibeSummary ?? "No summary"}
@@ -997,11 +1006,6 @@ export default function DiscoverPage() {
                                 {other.isVerified && (
                                   <ShieldCheck className="h-4 w-4 text-primary" />
                                 )}
-                                {/* Labelled here as well as on the card: the
-                                    chat is where someone would otherwise wait
-                                    for a reply from what they took to be a
-                                    person. */}
-                                {other.isDemo && <DemoProfileBadge />}
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5">
                                 {other.gender && (
