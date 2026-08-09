@@ -12,6 +12,7 @@ import {
   MapPin,
   MessageCircle,
   Send,
+  Check,
   ShieldCheck,
   Sparkles,
   Star,
@@ -198,6 +199,12 @@ export default function DiscoverPage() {
      spinner. The mutation's own isPending is a single shared flag and made
      every card on the page look busy at once. */
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  /* Which match is currently showing a persona typing indicator. Keyed by
+     match rather than a boolean so switching conversations mid-reply does not
+     leave the indicator running in the wrong thread. */
+  const [personaTypingMatchId, setPersonaTypingMatchId] = useState<
+    string | null
+  >(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [autogenMatchId, setAutogenMatchId] = useState<string | null>(null);
   const [selectedPlaceByMatch, setSelectedPlaceByMatch] = useState<
@@ -357,16 +364,55 @@ export default function DiscoverPage() {
     }),
   );
 
+  const personaReplyMutation = useMutation(
+    trpc.chat.requestPersonaReply.mutationOptions(),
+  );
+
   const sendMessageMutation = useMutation(
     trpc.chat.sendMessage.mutationOptions({
-      onSuccess: async () => {
-        setChatInput("");
-        if (selectedMatchId) {
+      onSuccess: async (result: any) => {
+        const matchId = selectedMatchId;
+        if (!matchId) return;
+
+        // Show the sent message straight away. This used to wait on the
+        // persona's reply, because the server generated it before responding.
+        await queryClient.invalidateQueries(
+          trpc.chat.listMessages.queryFilter({ matchId, limit: 50 }),
+        );
+
+        if (!result?.awaitingPersonaReply) return;
+
+        /**
+         * Hold the typing indicator for a believable beat.
+         *
+         * The model answers in a couple of seconds, which reads as a bot: no
+         * one receives a considered reply that fast. The wait is deliberate,
+         * and it is spent on work rather than idling, since the request is
+         * in flight for part of it.
+         *
+         * The floor is randomised so the rhythm does not become a tell, and it
+         * is a floor rather than a fixed delay: a slow model call is already
+         * long enough and should not have more added on top.
+         */
+        const minimumTypingMs = 10_000 + Math.random() * 5_000;
+        const startedAt = Date.now();
+
+        setPersonaTypingMatchId(matchId);
+
+        try {
+          await personaReplyMutation.mutateAsync({ matchId });
+        } finally {
+          const remaining = minimumTypingMs - (Date.now() - startedAt);
+          if (remaining > 0) {
+            await new Promise((resolve) => setTimeout(resolve, remaining));
+          }
+
+          // Cleared before the refetch so the indicator gives way to the
+          // message rather than sitting under it for a frame.
+          setPersonaTypingMatchId(null);
+
           await queryClient.invalidateQueries(
-            trpc.chat.listMessages.queryFilter({
-              matchId: selectedMatchId,
-              limit: 50,
-            }),
+            trpc.chat.listMessages.queryFilter({ matchId, limit: 50 }),
           );
         }
       },
@@ -586,6 +632,9 @@ export default function DiscoverPage() {
 
   const handleSendMessage = () => {
     if (!selectedMatchId || !chatInput.trim()) return;
+    // Cleared here rather than in onSuccess so the composer empties on the
+    // keystroke that sent it, not a round trip later.
+    setChatInput("");
     sendMessageMutation.mutate({
       matchId: selectedMatchId,
       content: chatInput.trim(),
@@ -775,18 +824,26 @@ export default function DiscoverPage() {
                               });
                             }}
                           >
+                            {/* A settled state must never render a spinner.
+                                Matched cards were showing one next to
+                                "Matched", which reads as still working on
+                                something that had already finished. */}
                             {isConnecting ? (
                               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : alreadyMatched ? (
+                              <Check className="mr-1.5 h-3.5 w-3.5" />
                             ) : (
                               <Heart className="mr-1.5 h-3.5 w-3.5" />
                             )}
-                            {alreadyMatched
-                              ? "Matched ✓"
-                              : outgoing
-                                ? "Sent"
-                                : incoming
-                                  ? "Accept & Match"
-                                  : "Connect"}
+                            {isConnecting
+                              ? "Connecting"
+                              : alreadyMatched
+                                ? "Matched"
+                                : outgoing
+                                  ? "Sent"
+                                  : incoming
+                                    ? "Accept & Match"
+                                    : "Connect"}
                           </Button>
                           {incoming && (
                             <span className="text-xs text-muted-foreground">
@@ -1049,6 +1106,28 @@ export default function DiscoverPage() {
                                 </div>
                               );
                             })
+                          )}
+                          {/* Typing indicator, styled as an incoming bubble so
+                              it occupies the space the reply will land in.
+                              aria-live announces it once to screen readers
+                              instead of on every dot animation frame. */}
+                          {personaTypingMatchId === selectedMatchId && (
+                            <div className="flex justify-start">
+                              <div
+                                className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2.5"
+                                role="status"
+                                aria-live="polite"
+                                aria-label="Typing"
+                              >
+                                {[0, 1, 2].map((dot) => (
+                                  <span
+                                    key={dot}
+                                    className="typing-dot h-1.5 w-1.5 rounded-full bg-muted-foreground/70"
+                                    style={{ animationDelay: `${dot * 0.16}s` }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
                           )}
                           <div ref={chatEndRef} />
                         </div>

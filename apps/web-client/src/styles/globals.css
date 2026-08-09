@@ -352,3 +352,34 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Typing indicator dots.
+ *
+ * Plain CSS on transform and opacity so the three dots animate on the
+ * compositor and cost no main-thread work while a reply is being generated.
+ * Staggered via an inline animation-delay per dot.
+ */
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typing-bounce 1.1s ease-in-out infinite;
+}
+
+/* Reduced motion: the dots are decorative, so drop the bounce. The indicator
+ * itself stays, since it carries the "still working" meaning. */
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot {
+    animation: none !important;
+  }
+}

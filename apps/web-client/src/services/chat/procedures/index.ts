@@ -7,7 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { directMessages } from "../schema";
 import { vibeMatches } from "@/services/social/schema";
-import { replyAsPersonaIfDemoMatch } from "../persona-reply";
+import { replyAsPersonaIfDemoMatch, isDemoUser } from "../persona-reply";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -76,21 +76,52 @@ const sendMessage = authedProcedure
         .returning();
     });
 
-    // If the other side is a seeded sample profile, have it answer.
-    //
-    // Awaited rather than fired off after the response, because on a serverless
-    // host nothing is guaranteed to run once the response is sent. It is a
-    // short completion on the fast model, and it swallows its own failures, so
-    // the worst case is the persona staying quiet — never a lost message.
-    //
-    // Real-to-real matches skip this entirely.
+    /**
+     * The persona reply is NOT generated here.
+     *
+     * It used to be awaited before returning, on the reasoning that a
+     * serverless host will not reliably run work scheduled after a response.
+     * That reasoning is sound and the consequence was still wrong: the sender's
+     * own message could not appear until a model call had finished, so pressing
+     * send did nothing visible for about five seconds. The person typing was
+     * made to wait on someone else's reply.
+     *
+     * Generating it is now a separate call the client makes straight after this
+     * one, which keeps the work inside a request (so it still runs anywhere)
+     * while letting the sender's message land immediately. It also gives the UI
+     * an honest window in which to show a typing indicator, instead of freezing
+     * the composer and showing nothing.
+     */
+    return {
+      ...message,
+      // Lets the client decide whether to show a typing indicator without
+      // having to work out which participant is the persona itself.
+      awaitingPersonaReply:
+        isDemoUser(match.userAId) || isDemoUser(match.userBId),
+    };
+  });
+
+/**
+ * Generate the sample persona's answer for a match, if one side is a persona.
+ *
+ * Split out of sendMessage so the sender's message is never held behind a model
+ * call. Safe to call for any match: it is a no-op when both participants are
+ * real people, and it swallows its own failures, so the worst case is the
+ * persona staying quiet rather than an error surfacing over a message that was
+ * already delivered.
+ */
+const requestPersonaReply = authedProcedure
+  .input(z.object({ matchId: z.string().uuid() }))
+  .mutation(async ({ ctx, input }) => {
+    const match = await assertMatchParticipant(ctx as any, input.matchId);
+
     await replyAsPersonaIfDemoMatch({
       matchId: input.matchId,
       userAId: match.userAId,
       userBId: match.userBId,
     });
 
-    return message;
+    return { ok: true };
   });
 
 const listMessages = authedProcedure
@@ -153,6 +184,7 @@ const getUnreadCount = authedProcedure
 
 export const chatRouter = createTRPCRouter({
   sendMessage,
+  requestPersonaReply,
   listMessages,
   getUnreadCount,
 });
