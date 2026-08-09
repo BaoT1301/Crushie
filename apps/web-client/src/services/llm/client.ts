@@ -206,11 +206,36 @@ async function llmFetch<T>(
     headers["X-End-User-Id"] = endUserId;
   }
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    // A transport failure here throws `TypeError: fetch failed` with the real
+    // reason buried in `cause` and no mention of the URL, which is close to
+    // useless in a log. It is also the single most likely thing to be wrong
+    // after a deploy: LLM_URL unset (so it silently points at localhost), the
+    // service not running, or a private hostname whose port does not match the
+    // port the service actually listens on.
+    //
+    // Naming the URL turns a generic network error into the answer.
+    const reason =
+      cause instanceof Error && cause.cause instanceof Error
+        ? cause.cause.message
+        : cause instanceof Error
+          ? cause.message
+          : String(cause);
+
+    throw new LLMServiceError(
+      503,
+      `Could not reach the AI service at ${url} (${reason}). ` +
+        `Check LLM_URL, that the service is running, and that its port matches.`,
+    );
+  }
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
