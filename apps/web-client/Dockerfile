@@ -24,16 +24,27 @@ FROM node:22-alpine AS builder
 
 WORKDIR /repo
 
-# Manifests first so this layer is reused whenever only source changes.
-COPY package.json package-lock.json ./
-COPY apps/web-client/package.json apps/web-client/
-COPY apps/llm/package.json apps/llm/
-
-# `npm ci` against the root lockfile, which is what keeps the overrides and the
-# cross platform native binaries (lightningcss, @tailwindcss/oxide) intact.
-RUN npm ci
-
+# Whole context in one COPY, rather than manifests first.
+#
+# The manifest-first layout is the usual way to get a cacheable install layer,
+# but it names each workspace package.json explicitly and a COPY whose source
+# does not exist fails the build. That turned a wrong Root Directory setting
+# into `"/apps/llm/package.json": not found`, which points at the wrong file and
+# says nothing about the actual cause. One COPY cannot fail that way, and the
+# error surfaces at `npm ci` instead, where a missing lockfile is self
+# explanatory.
+#
+# The cost is that changing any source file invalidates the install layer.
+# Railway builds on a fresh builder most of the time anyway, so the cache this
+# gives up was largely theoretical.
 COPY . .
+
+# `npm ci` against the ROOT lockfile. This is the whole reason the build context
+# must be the repository root: the lockfile carries the ws / path-to-regexp /
+# drizzle-orm security overrides and the cross platform native binaries for
+# lightningcss and @tailwindcss/oxide. Installing from apps/web-client alone
+# resolves a fresh tree and silently drops all of it.
+RUN npm ci
 
 # Placeholders only. ClerkProvider needs a syntactically valid publishable key
 # to prerender and the Supabase client needs a URL, but nothing is contacted at
