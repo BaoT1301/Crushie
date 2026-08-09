@@ -36,8 +36,10 @@ jobs:
       - name: Lint (web)
         run: npm run lint --workspace=@starter/web
 
-      - name: Unit tests (llm)
-        run: npm test --workspace=@starter/llm
+      # Root script runs both workspaces. Targeting one of them here meant the
+      # web suite was never executed in CI.
+      - name: Unit tests
+        run: npm test
 
       # Advisories that reach production traffic. Dev-only tooling
       # (vitest, drizzle-kit, the supabase CLI) is excluded deliberately —
