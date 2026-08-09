@@ -42,9 +42,14 @@ USER appuser
 # Expose port
 EXPOSE 3001
 
-# Health check
+# Health check.
+#
+# Reads PORT rather than hardcoding 3001: hosts that inject their own port
+# (Railway, Fly, Cloud Run) would otherwise probe a port nothing is listening
+# on, and the container would be restarted forever while the app was healthy.
+# src/index.ts uses the same `PORT || 3001` fallback.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider "http://127.0.0.1:${PORT:-3001}/api/health" || exit 1
 
 # Start
 CMD ["node", "dist/index.js"]
