@@ -215,7 +215,16 @@ export default function OnBoardClient() {
   };
 
   const handleContinue = () => {
-    router.push("/");
+    // "/dashboard", not "/". The button says it returns you to the dashboard,
+    // and "/" is the public landing page — so finishing onboarding logged you
+    // straight back out to the marketing site.
+    //
+    // The trap here is that the dashboard route lives at
+    // src/app/(dashboard)/dashboard/page.tsx, and "(dashboard)" is a route
+    // GROUP: parentheses mean it organises files without contributing a URL
+    // segment. So the path is "/dashboard" from the folder name, not from the
+    // group, and neither "/" nor "/dashboard/dashboard" is right.
+    router.push("/dashboard");
   };
 
   // ── Derived state ──────────────────────────────────────────────────

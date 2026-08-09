@@ -683,9 +683,9 @@ export default function DiscoverPage() {
                               <p className="truncate text-lg font-semibold text-foreground">
                                 {candidate.vibeName ?? "Unknown Vibe"}
                               </p>
-                              {/* Sample profiles never reply. Saying so beats
-                                  letting someone wait for a message that
-                                  cannot come. */}
+                              {/* Sample profiles connect instantly and answer
+                                  in character. Labelling them matters more
+                                  now than when they were silent, not less. */}
                               {candidate.isDemo && (
                                 <DemoProfileBadge className="shrink-0" />
                               )}

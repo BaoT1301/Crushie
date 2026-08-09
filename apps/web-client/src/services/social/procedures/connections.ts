@@ -114,17 +114,40 @@ export const sendRequest = authedProcedure
         };
       }
 
+      /**
+       * Sample personas accept immediately.
+       *
+       * A normal request lands as `pending` and waits for the other person to
+       * respond. A `demo_*` persona is not a person and has nobody to respond
+       * on its behalf, so the request sat pending forever. That mattered more
+       * than it sounds: the client only calls evaluateMatch when this returns
+       * `mutual: true` (see discover/page.tsx), and evaluateMatch is what
+       * creates the vibe_matches row that direct_messages is keyed on. So
+       * connecting with a persona produced a request that never resolved and a
+       * chat that could never open.
+       *
+       * Only the caller's own row is written. The reciprocal persona-to-user
+       * row is skipped deliberately: the connections INSERT policy is
+       * `WITH CHECK (requester_id = public.user_id())`, so writing it would
+       * need the service-role client, and nothing reads that direction for
+       * this purpose. Staying inside RLS is worth more than symmetry here.
+       */
+      const isSamplePersona = input.userId.startsWith("demo_");
+
       const [created] = await tx
         .insert(connections)
         .values({
           requesterId: ctx.user.id,
           addresseeId: input.userId,
+          ...(isSamplePersona
+            ? { status: "accepted" as const, updatedAt: new Date() }
+            : {}),
         })
         .returning();
 
       return {
         ...created,
-        mutual: false,
+        mutual: isSamplePersona,
         targetUserId: input.userId,
       };
     });
